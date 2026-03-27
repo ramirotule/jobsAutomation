@@ -34,21 +34,22 @@ export default function PostulacionDetailPage() {
   })
 
   useEffect(() => {
-    const data = getApplication(id)
-    if (!data) { router.push('/postulaciones'); return }
-    setApp(data)
-    setForm({
-      status:            data.status,
-      salaryExpectation: data.salaryExpectation?.toString() ?? '',
-      salaryOffered:     data.salaryOffered?.toString() ?? '',
-      currency:          data.currency ?? 'USD',
-      benefits:          data.benefits ?? '',
-      notes:             data.notes ?? '',
+    getApplication(id).then(data => {
+      if (!data) { router.push('/postulaciones'); return }
+      setApp(data)
+      setForm({
+        status:            data.status,
+        salaryExpectation: data.salaryExpectation?.toString() ?? '',
+        salaryOffered:     data.salaryOffered?.toString() ?? '',
+        currency:          data.currency ?? 'USD',
+        benefits:          data.benefits ?? '',
+        notes:             data.notes ?? '',
+      })
     })
   }, [id, router])
 
-  const handleSave = () => {
-    updateApplication(id, {
+  const handleSave = async () => {
+    await updateApplication(id, {
       status:            form.status,
       salaryExpectation: form.salaryExpectation ? Number(form.salaryExpectation) : undefined,
       salaryOffered:     form.salaryOffered ? Number(form.salaryOffered) : undefined,

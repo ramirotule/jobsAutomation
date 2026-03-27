@@ -29,7 +29,7 @@ export default function VacantesPage() {
   const PAGE_SIZE = 25
 
   useEffect(() => {
-    setApplied(new Set(getApplications().map(a => a.id)))
+    getApplications().then(apps => setApplied(new Set(apps.map(a => a.jobId))))
   }, [])
 
   const fetchJobs = useCallback(async () => {
@@ -57,22 +57,19 @@ export default function VacantesPage() {
     setPage(0)
   }
 
-  const handleApply = (job: JobPost, e: React.MouseEvent) => {
+  const handleApply = async (job: JobPost, e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     if (job.applyUrl) window.open(job.applyUrl, '_blank', 'noopener,noreferrer')
-    const now = new Date().toISOString()
-    saveApplication({
-      id:                job.id,
-      jobId:             job.id,
-      title:             job.title,
-      company:           job.company,
-      location:          job.location ?? '',
-      applyUrl:          job.applyUrl ?? '',
-      appliedAt:         now,
-      status:            'applied',
-      currency:          'USD',
-      updatedAt:         now,
+    await saveApplication({
+      jobId:    job.id,
+      title:    job.title,
+      company:  job.company,
+      location: job.location ?? '',
+      applyUrl: job.applyUrl ?? '',
+      appliedAt: new Date().toISOString(),
+      status:   'applied',
+      currency: 'USD',
     })
     setApplied(prev => new Set([...prev, job.id]))
     router.push('/postulaciones')

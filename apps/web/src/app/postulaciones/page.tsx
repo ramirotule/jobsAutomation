@@ -13,7 +13,7 @@ export default function PostulacionesPage() {
   const [filter, setFilter]         = useState<AppStatus | 'all'>('all')
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
-  useEffect(() => { setApps(getApplications()) }, [])
+  useEffect(() => { getApplications().then(setApps) }, [])
 
   const visible = filter === 'all' ? apps : apps.filter(a => a.status === filter)
 
@@ -24,10 +24,10 @@ export default function PostulacionesPage() {
 
   const handleDelete = (id: string) => setDeletingId(id)
 
-  const doDelete = () => {
+  const doDelete = async () => {
     if (!deletingId) return
-    deleteApplication(deletingId)
-    setApps(getApplications())
+    await deleteApplication(deletingId)
+    setApps(await getApplications())
     setDeletingId(null)
   }
 

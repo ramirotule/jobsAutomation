@@ -1,6 +1,8 @@
 // ============================================================
-// Application tracking — localStorage (no auth required)
+// Application tracking — Supabase
 // ============================================================
+
+import { supabase } from '@/lib/supabase'
 
 export type AppStatus =
   | 'applied'
@@ -11,8 +13,8 @@ export type AppStatus =
   | 'ghosted'
 
 export interface StoredApplication {
-  id: string           // same as job_post id
-  jobId: string
+  id: string           // UUID from applications table
+  jobId: string        // job_posts.id
   title: string
   company: string
   location: string
@@ -21,7 +23,7 @@ export interface StoredApplication {
   status: AppStatus
   salaryExpectation?: number
   salaryOffered?: number
-  currency: string     // 'USD' | 'ARS'
+  currency: string
   benefits?: string
   notes?: string
   updatedAt: string
@@ -45,32 +47,78 @@ export const STATUS_COLORS: Record<AppStatus, string> = {
   ghosted:   'bg-gray-100 text-gray-600',
 }
 
-const KEY = 'job_hunter_applications'
-
-export function getApplications(): StoredApplication[] {
-  if (typeof window === 'undefined') return []
-  try {
-    return JSON.parse(localStorage.getItem(KEY) ?? '[]')
-  } catch { return [] }
+function mapRow(row: Record<string, unknown>): StoredApplication {
+  return {
+    id:                row.id as string,
+    jobId:             (row.job_id as string) ?? '',
+    title:             (row.title as string) ?? '',
+    company:           (row.company as string) ?? '',
+    location:          (row.location as string) ?? '',
+    applyUrl:          (row.apply_url as string) ?? '',
+    appliedAt:         (row.applied_at as string) ?? '',
+    status:            (row.status as AppStatus) ?? 'applied',
+    salaryExpectation: row.salary_expectation as number | undefined,
+    salaryOffered:     row.salary_offered as number | undefined,
+    currency:          (row.currency as string) ?? 'USD',
+    benefits:          row.benefits as string | undefined,
+    notes:             row.notes as string | undefined,
+    updatedAt:         (row.updated_at as string) ?? '',
+  }
 }
 
-export function getApplication(id: string): StoredApplication | null {
-  return getApplications().find(a => a.id === id) ?? null
+export async function getApplications(): Promise<StoredApplication[]> {
+  const { data } = await supabase
+    .from('applications')
+    .select('*')
+    .order('applied_at', { ascending: false })
+  return (data ?? []).map(mapRow)
 }
 
-export function saveApplication(app: StoredApplication): void {
-  const apps = getApplications().filter(a => a.id !== app.id)
-  localStorage.setItem(KEY, JSON.stringify([app, ...apps]))
+export async function getApplication(id: string): Promise<StoredApplication | null> {
+  const { data } = await supabase
+    .from('applications')
+    .select('*')
+    .eq('id', id)
+    .single()
+  return data ? mapRow(data) : null
 }
 
-export function updateApplication(id: string, updates: Partial<StoredApplication>): void {
-  const apps = getApplications()
-  const idx = apps.findIndex(a => a.id === id)
-  if (idx === -1) return
-  apps[idx] = { ...apps[idx], ...updates, updatedAt: new Date().toISOString() }
-  localStorage.setItem(KEY, JSON.stringify(apps))
+export async function saveApplication(app: Omit<StoredApplication, 'id' | 'updatedAt'>): Promise<StoredApplication | null> {
+  const { data } = await supabase
+    .from('applications')
+    .insert({
+      job_id:             app.jobId,
+      title:              app.title,
+      company:            app.company,
+      location:           app.location,
+      apply_url:          app.applyUrl,
+      applied_at:         app.appliedAt,
+      status:             app.status,
+      salary_expectation: app.salaryExpectation,
+      salary_offered:     app.salaryOffered,
+      currency:           app.currency,
+      benefits:           app.benefits,
+      notes:              app.notes,
+    })
+    .select()
+    .single()
+  return data ? mapRow(data) : null
 }
 
-export function deleteApplication(id: string): void {
-  localStorage.setItem(KEY, JSON.stringify(getApplications().filter(a => a.id !== id)))
+export async function updateApplication(id: string, updates: Partial<StoredApplication>): Promise<void> {
+  await supabase
+    .from('applications')
+    .update({
+      ...(updates.status            !== undefined && { status:             updates.status }),
+      ...(updates.salaryExpectation !== undefined && { salary_expectation: updates.salaryExpectation }),
+      ...(updates.salaryOffered     !== undefined && { salary_offered:     updates.salaryOffered }),
+      ...(updates.currency          !== undefined && { currency:           updates.currency }),
+      ...(updates.benefits          !== undefined && { benefits:           updates.benefits }),
+      ...(updates.notes             !== undefined && { notes:              updates.notes }),
+    })
+    .eq('id', id)
+}
+
+export async function deleteApplication(id: string): Promise<void> {
+  await supabase.from('applications').delete().eq('id', id)
 }
