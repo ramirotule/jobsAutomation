@@ -50,10 +50,9 @@ export async function getJobPosts(
   let query = supabase
     .from('job_posts')
     .select('*', { count: 'exact' })
-    .order('created_at', { ascending: false })
+    .order('posted_at', { ascending: false, nullsFirst: false })
     .range(page * pageSize, (page + 1) * pageSize - 1)
 
-  if (filters.modality?.length)  query = query.in('modality', filters.modality)
   if (filters.seniority?.length) query = query.in('seniority', filters.seniority)
   if (filters.search) {
     query = query.or(`title.ilike.%${filters.search}%,company.ilike.%${filters.search}%`)
@@ -218,7 +217,7 @@ export async function getDashboardStats() {
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
 
   const [{ data: posts }, { data: apps }] = await Promise.all([
-    supabase.from('job_posts').select('id, created_at'),
+    supabase.from('job_posts').select('id, posted_at, created_at'),
     supabase.from('applications').select('id, status'),
   ])
 
@@ -229,8 +228,8 @@ export async function getDashboardStats() {
 
   return {
     total:      allPosts.length,
-    todayNew:   allPosts.filter(p => p.created_at.startsWith(today)).length,
-    weekNew:    allPosts.filter(p => p.created_at >= weekAgo).length,
+    todayNew:   allPosts.filter(p => (p.posted_at ?? p.created_at ?? '').startsWith(today)).length,
+    weekNew:    allPosts.filter(p => (p.posted_at ?? p.created_at ?? '') >= weekAgo).length,
     applied:    allApps.length,
     screening:  statusCount('screening'),
     interview:  statusCount('interview'),

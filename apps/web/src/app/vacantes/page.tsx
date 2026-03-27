@@ -6,9 +6,8 @@ import { useRouter } from 'next/navigation'
 import { getJobPosts, deleteJobPost, deleteAllJobPosts } from '@/lib/supabase'
 import { saveApplication, getApplications } from '@/lib/applications'
 import { AlertModal, ConfirmModal } from '@/components/Modal'
-import type { JobPost, JobFilters, Modality } from '@/types'
+import type { JobPost, JobFilters } from '@/types'
 
-const MODALITY_OPTIONS: Modality[] = ['remote', 'hybrid', 'onsite']
 const TODAY = new Date().toISOString().split('T')[0]
 
 export default function VacantesPage() {
@@ -151,36 +150,14 @@ export default function VacantesPage() {
         </div>
 
         {/* Filters */}
-        <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6 flex flex-wrap gap-4">
+        <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6">
           <input
             type="text"
             placeholder="Buscar por título o empresa..."
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(0) }}
-            className="flex-1 min-w-48 text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600 whitespace-nowrap">Modalidad:</span>
-            <div className="flex gap-1">
-              {MODALITY_OPTIONS.map(m => {
-                const active = filters.modality?.includes(m)
-                return (
-                  <button
-                    key={m}
-                    onClick={() => {
-                      const current = filters.modality ?? []
-                      setFilter('modality', active ? current.filter(x => x !== m) : [...current, m])
-                    }}
-                    className={`text-xs px-3 py-1.5 rounded-lg border capitalize transition-colors ${
-                      active ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-                    }`}
-                  >
-                    {m}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
         </div>
 
         {error && (
@@ -212,7 +189,7 @@ export default function VacantesPage() {
                 <JobCard
                   key={job.id}
                   job={job}
-                  isNew={(job.createdAt ?? '').startsWith(TODAY)}
+                  isNew={(job.postedAt ?? job.createdAt ?? '').startsWith(TODAY)}
                   isApplied={applied.has(job.id)}
                   deleting={deleting === job.id}
                   onApply={handleApply}

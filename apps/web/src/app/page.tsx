@@ -11,7 +11,7 @@ export default async function DashboardPage() {
   ])
 
   const today    = new Date().toISOString().split('T')[0]
-  const newToday = todayJobs.data.filter(j => (j.createdAt ?? '').startsWith(today))
+  const newToday = todayJobs.data.filter(j => (j.postedAt ?? j.createdAt ?? '').startsWith(today))
 
   return (
     <div className="min-h-screen bg-gray-50">
