@@ -10,6 +10,14 @@ import type { JobPost, JobFilters } from '@/types'
 
 const TODAY = new Date().toISOString().split('T')[0]
 
+type SortOption = 'newest' | 'oldest' | 'applied' | 'not-applied'
+const SORT_LABELS: Record<SortOption, string> = {
+  'newest':      'Más reciente',
+  'oldest':      'Más antiguo',
+  'applied':     'Postulados primero',
+  'not-applied': 'Sin postular primero',
+}
+
 export default function VacantesPage() {
   const router = useRouter()
   const [jobs, setJobs]             = useState<JobPost[]>([])
@@ -19,6 +27,7 @@ export default function VacantesPage() {
   const [filters, setFilters]       = useState<JobFilters>({})
   const [search, setSearch]         = useState('')
   const [page, setPage]             = useState(0)
+  const [sort, setSort]             = useState<SortOption>('newest')
   const [deleting, setDeleting]     = useState<string | null>(null)
   const [clearingAll, setClearingAll] = useState(false)
   const [applied, setApplied]       = useState<Set<string>>(new Set())
@@ -150,14 +159,29 @@ export default function VacantesPage() {
         </div>
 
         {/* Filters */}
-        <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6">
+        <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6 flex flex-wrap gap-3">
           <input
             type="text"
             placeholder="Buscar por título o empresa..."
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(0) }}
-            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex-1 min-w-48 text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {(Object.keys(SORT_LABELS) as SortOption[]).map(s => (
+              <button
+                key={s}
+                onClick={() => setSort(s)}
+                className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
+                  sort === s
+                    ? 'bg-gray-900 text-white border-gray-900'
+                    : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                }`}
+              >
+                {SORT_LABELS[s]}
+              </button>
+            ))}
+          </div>
         </div>
 
         {error && (
@@ -185,7 +209,14 @@ export default function VacantesPage() {
         ) : (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {jobs.map(job => (
+              {[...jobs].sort((a, b) => {
+                if (sort === 'applied')     return (applied.has(b.id) ? 1 : 0) - (applied.has(a.id) ? 1 : 0)
+                if (sort === 'not-applied') return (applied.has(a.id) ? 1 : 0) - (applied.has(b.id) ? 1 : 0)
+                const dateA = new Date(a.postedAt || a.createdAt || 0).getTime()
+                const dateB = new Date(b.postedAt || b.createdAt || 0).getTime()
+                if (sort === 'oldest') return dateA - dateB
+                return dateB - dateA // newest (default)
+              }).map(job => (
                 <JobCard
                   key={job.id}
                   job={job}
@@ -241,7 +272,11 @@ function JobCard({
     <div className="relative group">
       <Link
         href={`/vacantes/${job.id}`}
-        className="bg-white border border-gray-200 rounded-xl p-5 hover:shadow-md hover:border-blue-200 transition-all flex flex-col gap-3 block h-full"
+        className={`border rounded-xl p-5 hover:shadow-md transition-all flex flex-col gap-3 block h-full ${
+          isApplied
+            ? 'bg-green-50 border-green-200 hover:border-green-300'
+            : 'bg-white border-gray-200 hover:border-blue-200'
+        }`}
       >
         {/* Header */}
         <div className="pr-7">
