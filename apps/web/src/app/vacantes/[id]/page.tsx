@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { HighlightedDescription } from '@/components/HighlightedDescription'
 import { JobViewerButton } from '@/components/JobViewer'
+import { DeleteJobButton } from '@/components/DeleteJobButton'
 
 export default async function JobDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -127,6 +128,8 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
         </div>
       </div>
     </div>
+
+    <DeleteJobButton id={job.id} />
   )
 }
 
