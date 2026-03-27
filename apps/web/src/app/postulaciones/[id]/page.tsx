@@ -99,7 +99,7 @@ export default function PostulacionDetailPage() {
           <p className="text-xs text-gray-400 mt-4">
             Postulado el {new Date(app.appliedAt).toLocaleDateString('es-AR', {
               weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-              hour: '2-digit', minute: '2-digit'
+              hour: '2-digit', minute: '2-digit', hour12: false
             })}
           </p>
         </div>

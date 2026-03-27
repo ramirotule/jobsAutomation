@@ -118,7 +118,7 @@ function AppCard({ app, onDelete }: { app: StoredApplication; onDelete: (id: str
           <p className="text-xs text-gray-500 mt-0.5">{app.company}{app.location ? ` · ${app.location}` : ''}</p>
 
           <div className="flex flex-wrap gap-4 mt-3 text-xs text-gray-500">
-            <span>Postulado: {new Date(app.appliedAt).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+            <span>Postulado: {new Date(app.appliedAt).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })}</span>
             {app.salaryExpectation && (
               <span className="text-blue-600 font-medium">
                 Pretensión: {app.currency} {app.salaryExpectation.toLocaleString()}
