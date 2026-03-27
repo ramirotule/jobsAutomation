@@ -214,19 +214,28 @@ export async function getApplications(userId: string): Promise<Application[]> {
 // Stats para el dashboard (desde job_posts)
 // ============================================================
 export async function getDashboardStats() {
-  const { data, error } = await supabase
-    .from('job_posts')
-    .select('id, created_at')
-
-  if (error) throw error
-
-  const posts = data ?? []
-  const today = new Date().toISOString().split('T')[0]
+  const today   = new Date().toISOString().split('T')[0]
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
 
+  const [{ data: posts }, { data: apps }] = await Promise.all([
+    supabase.from('job_posts').select('id, created_at'),
+    supabase.from('applications').select('id, status'),
+  ])
+
+  const allPosts = posts ?? []
+  const allApps  = apps  ?? []
+
+  const statusCount = (s: string) => allApps.filter(a => a.status === s).length
+
   return {
-    total:    posts.length,
-    todayNew: posts.filter(p => p.created_at.startsWith(today)).length,
-    weekNew:  posts.filter(p => p.created_at >= weekAgo).length,
+    total:      allPosts.length,
+    todayNew:   allPosts.filter(p => p.created_at.startsWith(today)).length,
+    weekNew:    allPosts.filter(p => p.created_at >= weekAgo).length,
+    applied:    allApps.length,
+    screening:  statusCount('screening'),
+    interview:  statusCount('interview'),
+    offer:      statusCount('offer'),
+    rejected:   statusCount('rejected'),
+    ghosted:    statusCount('ghosted'),
   }
 }
