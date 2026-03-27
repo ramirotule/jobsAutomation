@@ -1,6 +1,7 @@
 import { getJobById } from '@/lib/supabase'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import { HighlightedDescription } from '@/components/HighlightedDescription'
 
 export default async function JobDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -100,9 +101,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
           {job.description && (
             <div className="px-6 py-5">
               <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Descripción</h2>
-              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
-                {job.description}
-              </p>
+              <HighlightedDescription text={job.description} />
             </div>
           )}
 
