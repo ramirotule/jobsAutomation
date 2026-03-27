@@ -2,6 +2,7 @@ import { getJobById } from '@/lib/supabase'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { HighlightedDescription } from '@/components/HighlightedDescription'
+import { JobViewerButton } from '@/components/JobViewer'
 
 export default async function JobDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -39,14 +40,17 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
                 <p className="text-gray-600 mt-1 font-medium">{job.company}</p>
               </div>
               {job.applyUrl && (
-                <a
-                  href={job.applyUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="shrink-0 bg-blue-600 text-white text-sm font-medium px-5 py-2.5 rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Postular →
-                </a>
+                <div className="flex items-center gap-2 shrink-0">
+                  <JobViewerButton url={job.applyUrl} title={job.title} />
+                  <a
+                    href={job.applyUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bg-blue-600 text-white text-sm font-medium px-5 py-2.5 rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Postular →
+                  </a>
+                </div>
               )}
             </div>
 
