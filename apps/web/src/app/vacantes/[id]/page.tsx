@@ -112,9 +112,9 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
           )}
 
           {/* Footer CTA */}
-          {job.applyUrl && (
-            <div className="px-6 py-5 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-4">
-              <p className="text-sm text-gray-500">¿Te interesa esta posición?</p>
+          <div className="px-6 py-5 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-4">
+            <DeleteJobButton id={job.id} />
+            {job.applyUrl && (
               <a
                 href={job.applyUrl}
                 target="_blank"
@@ -123,14 +123,12 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
               >
                 Postular ahora →
               </a>
-            </div>
-          )}
+            )}
+          </div>
 
         </div>
       </div>
     </div>
-
-    <DeleteJobButton id={job.id} />
     </>
   )
 }
