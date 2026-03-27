@@ -21,6 +21,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
     : null
 
   return (
+    <>
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-3xl mx-auto px-4 py-8">
 
@@ -130,6 +131,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
     </div>
 
     <DeleteJobButton id={job.id} />
+    </>
   )
 }
 
