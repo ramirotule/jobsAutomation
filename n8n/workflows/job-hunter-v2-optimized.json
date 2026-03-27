@@ -1,15 +1,15 @@
 {
-  "name": "Job Hunter V6 - JSearch",
+  "name": "Job Hunter V7 - Multi Source",
   "nodes": [
     {
       "parameters": {
-        "rule": { "interval": [{ "field": "hours", "hoursInterval": 6 }] }
+        "rule": { "interval": [{ "field": "cronExpression", "expression": "0 9,21 * * *" }] }
       },
       "id": "trigger",
       "name": "Schedule - Every 6 Hours",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1,
-      "position": [0, 300]
+      "position": [0, 370]
     },
     {
       "parameters": {
@@ -19,8 +19,9 @@
       "name": "Config - My Profile",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [220, 300]
+      "position": [220, 370]
     },
+
     {
       "parameters": {
         "method": "GET",
@@ -36,7 +37,7 @@
         "queryParameters": {
           "parameters": [
             { "name": "query",            "value": "React Developer OR Frontend Developer OR React Native Developer" },
-            { "name": "num_pages",        "value": "3" },
+            { "name": "num_pages",        "value": "2" },
             { "name": "remote_jobs_only", "value": "true" },
             { "name": "date_posted",      "value": "week" }
           ]
@@ -47,19 +48,112 @@
       "name": "API - JSearch",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [450, 300],
-      "onError": "continueErrorOutput"
+      "position": [480, 100],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "jsCode": "const results = [];\n\nfunction stripHtml(str) {\n  return (str || '').replace(/<[^>]*>/g, ' ').replace(/\\s+/g, ' ').trim().slice(0, 3000);\n}\n\nfor (const item of $input.all()) {\n  const d = item.json;\n  if (!d || d.error) continue;\n  if (d.data && Array.isArray(d.data)) {\n    for (const j of d.data) {\n      if (!j.job_id || !j.job_title) continue;\n      results.push({\n        json: {\n          external_id: 'js_' + j.job_id,\n          title:       j.job_title,\n          company:     j.employer_name || 'Unknown',\n          description: stripHtml(j.job_description || ''),\n          apply_url:   j.job_apply_link || j.job_google_link || '',\n          posted_at:   j.job_posted_at_timestamp\n            ? new Date(j.job_posted_at_timestamp * 1000).toISOString()\n            : new Date().toISOString(),\n          location:    j.job_is_remote ? 'Remote' : [j.job_city, j.job_country].filter(Boolean).join(', '),\n          source:      'jsearch'\n        }\n      });\n    }\n  }\n}\n\nreturn results;"
+        "method": "GET",
+        "url": "https://remoteok.com/api?tags=react,react-native,frontend,javascript&limit=50",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "User-Agent", "value": "JobHunterBot/1.0" }
+          ]
+        },
+        "options": { "timeout": 15000 }
       },
-      "id": "norm-logic",
-      "name": "Code - Normalize",
+      "id": "fetch-remoteok",
+      "name": "API - RemoteOK",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [480, 280],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://remotive.com/api/remote-jobs?category=software-dev&search=react&limit=50",
+        "options": { "timeout": 15000 }
+      },
+      "id": "fetch-remotive",
+      "name": "API - Remotive",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [480, 460],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://jobicy.com/api/v2/remote-jobs?tag=react&count=50",
+        "options": { "timeout": 15000 }
+      },
+      "id": "fetch-jobicy",
+      "name": "API - Jobicy",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [480, 640],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+
+    {
+      "parameters": {
+        "jsCode": "const results = [];\nfunction stripHtml(s) { return (s||'').replace(/<[^>]*>/g,' ').replace(/\\s+/g,' ').trim().slice(0,3000); }\nfor (const item of $input.all()) {\n  const d = item.json;\n  if (!d || !d.data || !Array.isArray(d.data)) continue;\n  for (const j of d.data) {\n    if (!j.job_id || !j.job_title) continue;\n    results.push({ json: {\n      external_id: 'js_' + j.job_id,\n      title: j.job_title,\n      company: j.employer_name || 'Unknown',\n      description: stripHtml(j.job_description || ''),\n      apply_url: j.job_apply_link || j.job_google_link || '',\n      posted_at: j.job_posted_at_timestamp ? new Date(j.job_posted_at_timestamp * 1000).toISOString() : new Date().toISOString(),\n      location: j.job_is_remote ? 'Remote' : [j.job_city, j.job_country].filter(Boolean).join(', '),\n      source: 'jsearch'\n    }});\n  }\n}\nreturn results.length ? results : [{ json: { _empty: true } }];"
+      },
+      "id": "norm-jsearch",
+      "name": "Norm - JSearch",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [680, 300]
+      "position": [740, 100]
     },
+    {
+      "parameters": {
+        "jsCode": "const results = [];\nfunction stripHtml(s) { return (s||'').replace(/<[^>]*>/g,' ').replace(/\\s+/g,' ').trim().slice(0,3000); }\nfor (const item of $input.all()) {\n  const raw = item.json;\n  const jobs = Array.isArray(raw) ? raw : [raw];\n  for (const j of jobs) {\n    if (!j.slug || !j.position || j.legal) continue;\n    results.push({ json: {\n      external_id: 'rok_' + j.slug,\n      title: j.position,\n      company: j.company || 'Unknown',\n      description: stripHtml(j.description || ''),\n      apply_url: j.url || ('https://remoteok.com/remote-jobs/' + j.slug),\n      posted_at: j.date ? new Date(j.date * 1000).toISOString() : new Date().toISOString(),\n      location: 'Remote',\n      source: 'remoteok'\n    }});\n  }\n}\nreturn results.length ? results : [{ json: { _empty: true } }];"
+      },
+      "id": "norm-remoteok",
+      "name": "Norm - RemoteOK",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [740, 280]
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = [];\nfunction stripHtml(s) { return (s||'').replace(/<[^>]*>/g,' ').replace(/\\s+/g,' ').trim().slice(0,3000); }\nfor (const item of $input.all()) {\n  const d = item.json;\n  if (!d || !d.jobs) continue;\n  for (const j of d.jobs) {\n    if (!j.id || !j.title) continue;\n    results.push({ json: {\n      external_id: 'rmt_' + j.id,\n      title: j.title,\n      company: j.company_name || 'Unknown',\n      description: stripHtml(j.description || ''),\n      apply_url: j.url || '',\n      posted_at: j.publication_date || new Date().toISOString(),\n      location: j.candidate_required_location || 'Remote',\n      source: 'remotive'\n    }});\n  }\n}\nreturn results.length ? results : [{ json: { _empty: true } }];"
+      },
+      "id": "norm-remotive",
+      "name": "Norm - Remotive",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [740, 460]
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = [];\nfunction stripHtml(s) { return (s||'').replace(/<[^>]*>/g,' ').replace(/\\s+/g,' ').trim().slice(0,3000); }\nfor (const item of $input.all()) {\n  const d = item.json;\n  if (!d || !d.jobs) continue;\n  for (const j of d.jobs) {\n    if (!j.id || !j.jobTitle) continue;\n    results.push({ json: {\n      external_id: 'jcy_' + j.id,\n      title: j.jobTitle,\n      company: j.companyName || 'Unknown',\n      description: stripHtml(j.jobDescription || ''),\n      apply_url: j.url || '',\n      posted_at: j.pubDate || new Date().toISOString(),\n      location: j.jobGeo || 'Remote',\n      source: 'jobicy'\n    }});\n  }\n}\nreturn results.length ? results : [{ json: { _empty: true } }];"
+      },
+      "id": "norm-jobicy",
+      "name": "Norm - Jobicy",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [740, 640]
+    },
+
+    {
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 4
+      },
+      "id": "merge-all",
+      "name": "Merge - All Sources",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [1000, 370]
+    },
+
     {
       "parameters": {
         "operation": "getAll",
@@ -73,27 +167,27 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "alwaysOutputData": true,
-      "position": [680, 500]
+      "position": [1000, 600]
     },
     {
       "parameters": {
-        "jsCode": "const newJobs = $('Code - Normalize').all();\nlet existingIds = new Set();\ntry {\n  const existing = $('DB - Get Existing IDs').all();\n  existingIds = new Set(existing.map(d => String(d.json.external_id)));\n} catch (e) {}\n\nreturn newJobs.filter(job => {\n  const id = String(job.json.external_id);\n  return id && id !== 'undefined' && !existingIds.has(id);\n});"
+        "jsCode": "const newJobs = $('Merge - All Sources').all().filter(j => !j.json._empty);\nlet existingIds = new Set();\ntry {\n  const existing = $('DB - Get Existing IDs').all();\n  existingIds = new Set(existing.map(d => String(d.json.external_id)));\n} catch (e) {}\nreturn newJobs.filter(job => {\n  const id = String(job.json.external_id);\n  return id && id !== 'undefined' && !existingIds.has(id);\n});"
       },
       "id": "dedup",
       "name": "Filter - Deduplication",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [920, 300]
+      "position": [1260, 370]
     },
     {
       "parameters": {
-        "jsCode": "// ── Listas de descalificación ──────────────────────────────────────────\nconst BACKEND_TITLE_DQ = [\n  '.net', 'c#', 'c sharp', 'java developer', 'java engineer',\n  'python developer', 'python engineer', 'ruby developer', 'ruby engineer',\n  'backend developer', 'backend engineer', 'backend dev',\n  'devops', 'site reliability', 'sre', 'cloud engineer', 'cloud architect',\n  'data engineer', 'data scientist', 'ml engineer', 'machine learning',\n  'golang', 'go developer', 'rust developer', 'scala developer',\n  'php developer', 'laravel developer', 'django developer', 'wordpress developer',\n  'ios developer', 'ios engineer', 'android developer', 'android engineer',\n  'kotlin developer', 'swift developer',\n  'qa engineer', 'qa analyst', 'quality assurance', 'test engineer', 'sdet',\n  'blockchain developer', 'solidity', 'embedded', 'firmware'\n];\n\nconst BACKEND_DESC_HEAVY = [\n  'asp.net', '.net core', 'spring boot', 'spring framework',\n  'django', 'flask', 'laravel', 'ruby on rails',\n  'hibernate', 'entity framework',\n  'kafka', 'rabbitmq', 'kubernetes',\n  'sql server', 'oracle database', 'pl/sql'\n];\n\n// ── Señales positivas ───────────────────────────────────────────────────\nconst FRONTEND_TITLE_SIGNALS = [\n  'frontend', 'front-end', 'front end',\n  'react', 'react native', 'react.js', 'reactjs',\n  'ui developer', 'ui engineer',\n  'javascript developer', 'js developer', 'typescript developer',\n  'next.js', 'nextjs', 'angular developer', 'vue developer',\n  'web developer', 'web engineer', 'mobile developer'\n];\n\nconst PRIMARY_SKILLS   = ['react', 'react.js', 'react native', 'typescript', 'javascript', 'next.js'];\nconst SECONDARY_SKILLS = ['redux', 'graphql', 'tailwind', 'firebase', 'node.js', 'mui', 'material-ui', 'expo', 'webpack', 'vite', 'css', 'html5'];\n\nconst ALERT_THRESHOLD = 55;\n\n// ── Matching ────────────────────────────────────────────────────────────\nreturn $input.all().map(function(item) {\n  const job     = item.json;\n  const title   = (job.title || '').toLowerCase();\n  const desc    = (job.description || '').toLowerCase();\n  const combined = title + ' ' + desc;\n\n  // 1. Descalificar: backend en título\n  const backendTitleHit = BACKEND_TITLE_DQ.find(t => title.includes(t));\n  if (backendTitleHit) {\n    return { json: { ...job, match_score: 0, reasons: ['Backend en título: ' + backendTitleHit], is_hot_match: false } };\n  }\n\n  // 2. Descalificar: sin señal frontend en título NI skill primaria en desc\n  const hasFrontendTitle = FRONTEND_TITLE_SIGNALS.some(s => title.includes(s));\n  const primaryInDesc    = PRIMARY_SKILLS.filter(s => desc.includes(s));\n  if (!hasFrontendTitle && primaryInDesc.length === 0) {\n    return { json: { ...job, match_score: 0, reasons: ['Sin señal frontend'], is_hot_match: false } };\n  }\n\n  // 3. Descalificar: descripción backend-heavy (3+ señales)\n  const backendDescHits = BACKEND_DESC_HEAVY.filter(t => combined.includes(t));\n  if (backendDescHits.length >= 3) {\n    return { json: { ...job, match_score: 0, reasons: ['Backend-heavy: ' + backendDescHits.slice(0, 2).join(', ')], is_hot_match: false } };\n  }\n\n  // ── Scoring ─────────────────────────────────────────────────────────\n  let score = 0;\n  const reasons = [];\n\n  // Título frontend genérico (+20)\n  if (hasFrontendTitle) {\n    score += 20;\n    reasons.push('Frontend en título');\n  }\n\n  // React específico en título (+15 extra)\n  if (title.includes('react')) {\n    score += 15;\n    reasons.push('React en título');\n  }\n\n  // Skills primarias en descripción (hasta +35)\n  const primaryScore = Math.round((primaryInDesc.length / PRIMARY_SKILLS.length) * 35);\n  score += primaryScore;\n  if (primaryInDesc.length > 0) {\n    reasons.push('Skills: ' + primaryInDesc.slice(0, 4).join(', '));\n  }\n\n  // Skills secundarias (hasta +10)\n  const secondaryMatched = SECONDARY_SKILLS.filter(s => combined.includes(s));\n  score += Math.min(secondaryMatched.length * 2, 10);\n\n  // Seniority (+15)\n  if (title.includes('senior') || title.includes('sr.') || title.includes('sr ') ||\n      desc.includes('5+ years') || desc.includes('5 years') || desc.includes('senior')) {\n    score += 15;\n    reasons.push('Senior');\n  }\n\n  // Remote (+5)\n  if (combined.includes('remote') || (job.location || '').toLowerCase().includes('remote')) {\n    score += 5;\n    reasons.push('Remote');\n  }\n\n  const finalScore = Math.min(Math.round(score), 100);\n\n  return {\n    json: {\n      ...job,\n      match_score: finalScore,\n      reasons,\n      flags: primaryInDesc,\n      is_hot_match: finalScore >= ALERT_THRESHOLD\n    }\n  };\n});"
+        "jsCode": "const BACKEND_TITLE_DQ = [\n  '.net', 'c#', 'c sharp', 'java developer', 'java engineer',\n  'python developer', 'python engineer', 'ruby developer', 'ruby engineer',\n  'backend developer', 'backend engineer', 'backend dev',\n  'devops', 'site reliability', 'sre', 'cloud engineer', 'cloud architect',\n  'data engineer', 'data scientist', 'ml engineer', 'machine learning',\n  'golang', 'go developer', 'rust developer', 'scala developer',\n  'php developer', 'laravel developer', 'django developer', 'wordpress developer',\n  'ios developer', 'ios engineer', 'android developer', 'android engineer',\n  'kotlin developer', 'swift developer',\n  'qa engineer', 'qa analyst', 'quality assurance', 'test engineer', 'sdet',\n  'blockchain developer', 'solidity', 'embedded', 'firmware'\n];\n\nconst BACKEND_DESC_HEAVY = [\n  'asp.net', '.net core', 'spring boot', 'spring framework',\n  'django', 'flask', 'laravel', 'ruby on rails',\n  'hibernate', 'entity framework',\n  'kafka', 'rabbitmq', 'kubernetes',\n  'sql server', 'oracle database', 'pl/sql'\n];\n\nconst FRONTEND_TITLE_SIGNALS = [\n  'frontend', 'front-end', 'front end',\n  'react', 'react native', 'react.js', 'reactjs',\n  'ui developer', 'ui engineer',\n  'javascript developer', 'js developer', 'typescript developer',\n  'next.js', 'nextjs', 'angular developer', 'vue developer',\n  'web developer', 'web engineer', 'mobile developer'\n];\n\nconst PRIMARY_SKILLS   = ['react', 'react.js', 'react native', 'typescript', 'javascript', 'next.js'];\nconst SECONDARY_SKILLS = ['redux', 'graphql', 'tailwind', 'firebase', 'node.js', 'mui', 'material-ui', 'expo', 'webpack', 'vite', 'css', 'html5'];\n\nconst ALERT_THRESHOLD = 55;\n\nreturn $input.all().map(function(item) {\n  const job     = item.json;\n  const title   = (job.title || '').toLowerCase();\n  const desc    = (job.description || '').toLowerCase();\n  const combined = title + ' ' + desc;\n\n  const backendTitleHit = BACKEND_TITLE_DQ.find(t => title.includes(t));\n  if (backendTitleHit) {\n    return { json: { ...job, match_score: 0, reasons: ['Backend en título: ' + backendTitleHit], is_hot_match: false } };\n  }\n\n  const hasFrontendTitle = FRONTEND_TITLE_SIGNALS.some(s => title.includes(s));\n  const primaryInDesc    = PRIMARY_SKILLS.filter(s => desc.includes(s));\n  if (!hasFrontendTitle && primaryInDesc.length === 0) {\n    return { json: { ...job, match_score: 0, reasons: ['Sin señal frontend'], is_hot_match: false } };\n  }\n\n  const backendDescHits = BACKEND_DESC_HEAVY.filter(t => combined.includes(t));\n  if (backendDescHits.length >= 3) {\n    return { json: { ...job, match_score: 0, reasons: ['Backend-heavy: ' + backendDescHits.slice(0, 2).join(', ')], is_hot_match: false } };\n  }\n\n  let score = 0;\n  const reasons = [];\n\n  if (hasFrontendTitle) { score += 20; reasons.push('Frontend en título'); }\n  if (title.includes('react')) { score += 15; reasons.push('React en título'); }\n\n  const primaryScore = Math.round((primaryInDesc.length / PRIMARY_SKILLS.length) * 35);\n  score += primaryScore;\n  if (primaryInDesc.length > 0) { reasons.push('Skills: ' + primaryInDesc.slice(0, 4).join(', ')); }\n\n  const secondaryMatched = SECONDARY_SKILLS.filter(s => combined.includes(s));\n  score += Math.min(secondaryMatched.length * 2, 10);\n\n  if (title.includes('senior') || title.includes('sr.') || title.includes('sr ') ||\n      desc.includes('5+ years') || desc.includes('5 years') || desc.includes('senior')) {\n    score += 15;\n    reasons.push('Senior');\n  }\n\n  if (combined.includes('remote') || (job.location || '').toLowerCase().includes('remote')) {\n    score += 5;\n    reasons.push('Remote');\n  }\n\n  const finalScore = Math.min(Math.round(score), 100);\n\n  return {\n    json: { ...job, match_score: finalScore, reasons, flags: primaryInDesc, is_hot_match: finalScore >= ALERT_THRESHOLD }\n  };\n});"
       },
       "id": "scoring",
       "name": "Code - Matching Engine",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1150, 300]
+      "position": [1520, 370]
     },
     {
       "parameters": {
@@ -103,7 +197,7 @@
       "name": "Filter - Frontend Only",
       "type": "n8n-nodes-base.filter",
       "typeVersion": 1,
-      "position": [1380, 300]
+      "position": [1760, 370]
     },
     {
       "parameters": {
@@ -126,7 +220,7 @@
       "name": "DB - Insert Job",
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
-      "position": [1620, 450]
+      "position": [2020, 550]
     },
     {
       "parameters": {
@@ -136,35 +230,47 @@
       "name": "Filter - High Score Only",
       "type": "n8n-nodes-base.filter",
       "typeVersion": 1,
-      "position": [1620, 150]
+      "position": [2020, 190]
     },
     {
       "parameters": {
         "fromEmail": "Job Hunter <ramirotule@gmail.com>",
         "toEmail": "={{$('Config - My Profile').first().json.myEmail}}",
         "subject": "={{ '🎯 ' + $json.match_score + '% — ' + $json.title + ' @ ' + $json.company }}",
-        "html": "={{ '<div style=\"font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;border:1px solid #e5e7eb;border-radius:12px\">' + '<h2 style=\"color:#1d4ed8;margin:0 0 4px\">' + $json.title + '</h2>' + '<p style=\"color:#6b7280;margin:0 0 16px\">' + $json.company + ' · ' + $json.location + '</p>' + '<div style=\"background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 16px;margin-bottom:16px\">' + '<span style=\"font-size:24px;font-weight:bold;color:#15803d\">' + $json.match_score + '%</span><span style=\"color:#15803d;margin-left:8px\">match</span></div>' + '<p style=\"font-size:14px;color:#374151\"><strong>Por qué coincide:</strong> ' + ($json.reasons || []).join(' · ') + '</p>' + '<a href=\"' + $json.apply_url + '\" style=\"display:inline-block;background:#1d4ed8;color:white;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:bold;margin-top:16px\">Ver oferta →</a>' + '</div>' }}",
+        "html": "={{ '<div style=\"font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;border:1px solid #e5e7eb;border-radius:12px\">' + '<h2 style=\"color:#1d4ed8;margin:0 0 4px\">' + $json.title + '</h2>' + '<p style=\"color:#6b7280;margin:0 0 16px\">' + $json.company + ' · ' + $json.location + '</p>' + '<div style=\"background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 16px;margin-bottom:16px\">' + '<span style=\"font-size:24px;font-weight:bold;color:#15803d\">' + $json.match_score + '%</span><span style=\"color:#15803d;margin-left:8px\">match — fuente: ' + ($json.source||'') + '</span></div>' + '<p style=\"font-size:14px;color:#374151\"><strong>Por qué coincide:</strong> ' + ($json.reasons || []).join(' · ') + '</p>' + '<a href=\"' + $json.apply_url + '\" style=\"display:inline-block;background:#1d4ed8;color:white;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:bold;margin-top:16px\">Ver oferta →</a>' + '</div>' }}",
         "options": {}
       },
       "id": "email-node",
       "name": "Email - Send Alert",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
-      "position": [1870, 150]
+      "position": [2280, 190]
     }
   ],
   "connections": {
     "Schedule - Every 6 Hours": { "main": [[{ "node": "Config - My Profile",    "type": "main", "index": 0 }]] },
-    "Config - My Profile":      { "main": [[{ "node": "API - JSearch",           "type": "main", "index": 0 }]] },
-    "API - JSearch":            { "main": [[{ "node": "Code - Normalize",        "type": "main", "index": 0 }]] },
-    "Code - Normalize":         { "main": [[{ "node": "DB - Get Existing IDs",   "type": "main", "index": 0 }]] },
-    "DB - Get Existing IDs":    { "main": [[{ "node": "Filter - Deduplication",  "type": "main", "index": 0 }]] },
-    "Filter - Deduplication":   { "main": [[{ "node": "Code - Matching Engine",  "type": "main", "index": 0 }]] },
-    "Code - Matching Engine":   { "main": [[{ "node": "Filter - Frontend Only",  "type": "main", "index": 0 }]] },
-    "Filter - Frontend Only":   { "main": [[
+    "Config - My Profile": { "main": [[
+      { "node": "API - JSearch",   "type": "main", "index": 0 },
+      { "node": "API - RemoteOK",  "type": "main", "index": 0 },
+      { "node": "API - Remotive",  "type": "main", "index": 0 },
+      { "node": "API - Jobicy",    "type": "main", "index": 0 }
+    ]] },
+    "API - JSearch":   { "main": [[{ "node": "Norm - JSearch",   "type": "main", "index": 0 }]] },
+    "API - RemoteOK":  { "main": [[{ "node": "Norm - RemoteOK",  "type": "main", "index": 0 }]] },
+    "API - Remotive":  { "main": [[{ "node": "Norm - Remotive",  "type": "main", "index": 0 }]] },
+    "API - Jobicy":    { "main": [[{ "node": "Norm - Jobicy",    "type": "main", "index": 0 }]] },
+    "Norm - JSearch":  { "main": [[{ "node": "Merge - All Sources", "type": "main", "index": 0 }]] },
+    "Norm - RemoteOK": { "main": [[{ "node": "Merge - All Sources", "type": "main", "index": 1 }]] },
+    "Norm - Remotive": { "main": [[{ "node": "Merge - All Sources", "type": "main", "index": 2 }]] },
+    "Norm - Jobicy":   { "main": [[{ "node": "Merge - All Sources", "type": "main", "index": 3 }]] },
+    "Merge - All Sources":    { "main": [[{ "node": "DB - Get Existing IDs",   "type": "main", "index": 0 }]] },
+    "DB - Get Existing IDs":  { "main": [[{ "node": "Filter - Deduplication",  "type": "main", "index": 0 }]] },
+    "Filter - Deduplication": { "main": [[{ "node": "Code - Matching Engine",  "type": "main", "index": 0 }]] },
+    "Code - Matching Engine": { "main": [[{ "node": "Filter - Frontend Only",  "type": "main", "index": 0 }]] },
+    "Filter - Frontend Only": { "main": [[
       { "node": "DB - Insert Job",          "type": "main", "index": 0 },
       { "node": "Filter - High Score Only", "type": "main", "index": 0 }
     ]] },
-    "Filter - High Score Only": { "main": [[{ "node": "Email - Send Alert",      "type": "main", "index": 0 }]] }
+    "Filter - High Score Only": { "main": [[{ "node": "Email - Send Alert", "type": "main", "index": 0 }]] }
   }
 }
