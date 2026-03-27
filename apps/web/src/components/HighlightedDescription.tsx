@@ -2,72 +2,96 @@
 
 const FRONTEND_KEYWORDS = [
   'React Native', 'React.js', 'React',
-  'TypeScript', 'JavaScript', 'JS', 'TS',
+  'TypeScript', 'JavaScript',
   'Next.js', 'NextJS',
-  'Redux', 'Zustand', 'MobX', 'MobX-State-Tree',
+  'Redux', 'Zustand', 'MobX',
   'GraphQL', 'Apollo',
-  'Tailwind', 'CSS', 'SCSS', 'Sass', 'Styled Components',
-  'HTML', 'HTML5',
+  'Tailwind', 'SCSS', 'Sass', 'Styled Components',
+  'HTML5', 'HTML',
   'Expo', 'React Navigation',
   'MUI', 'Material UI', 'Chakra', 'Ant Design',
   'Vite', 'Webpack',
-  'iOS', 'Android', 'Mobile',
-  'Frontend', 'Front-end', 'Front end',
-  'UI', 'UX', 'UI/UX',
+  'iOS', 'Android',
+  'Frontend', 'Front-end',
+  'UI/UX', 'UX', 'UI',
   'Figma', 'Storybook',
-  'Jest', 'Testing Library', 'Cypress', 'Playwright',
+  'Jest', 'Cypress', 'Playwright',
   'Firebase',
+  'Mobile',
+  'CSS',
+  'JS', 'TS',
 ]
 
 const BACKEND_KEYWORDS = [
   'Node.js', 'NodeJS',
   'Python', 'Django', 'Flask', 'FastAPI',
   'Java', 'Spring', 'Kotlin',
-  'Go', 'Golang',
+  'Golang', 'Go',
   'Ruby', 'Rails',
   'PHP', 'Laravel',
-  'Rust', 'C++', 'C#', '.NET',
+  'Rust',
+  'C#', '.NET',
   'PostgreSQL', 'MySQL', 'MongoDB', 'Redis', 'Elasticsearch',
-  'SQL', 'NoSQL',
-  'REST API', 'REST', 'Microservices', 'Microservice',
+  'NoSQL', 'SQL',
+  'Microservices',
   'Docker', 'Kubernetes', 'K8s',
-  'AWS', 'GCP', 'Azure', 'Cloud',
-  'DevOps', 'CI/CD', 'Jenkins', 'GitHub Actions',
+  'AWS', 'GCP', 'Azure',
+  'DevOps', 'CI/CD', 'Jenkins',
   'Terraform', 'Ansible',
-  'Linux', 'Bash', 'Shell',
-  'Backend', 'Back-end', 'Back end',
+  'Linux', 'Bash',
+  'Backend', 'Back-end',
   'Full Stack', 'Full-Stack', 'Fullstack',
-  'Server', 'Serverless', 'Lambda',
-  'Kafka', 'RabbitMQ', 'Celery',
-  'nginx', 'Apache',
-  'gRPC',
+  'Serverless',
+  'Kafka', 'RabbitMQ',
+  'nginx', 'gRPC',
 ]
 
 type Segment = { text: string; type: 'frontend' | 'backend' | 'plain' }
 
 function tokenize(text: string): Segment[] {
-  // Build a single regex that matches all keywords, longest first to avoid partial matches
   const allKeywords = [...FRONTEND_KEYWORDS, ...BACKEND_KEYWORDS]
     .sort((a, b) => b.length - a.length)
 
-  const pattern = allKeywords
-    .map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-    .join('|')
+  const escaped = allKeywords.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  // Use lookahead/lookbehind so we only match whole words,
+  // not letters that happen to appear inside another word.
+  const regex = new RegExp(
+    `(?<![a-zA-Z0-9])(${escaped.join('|')})(?![a-zA-Z0-9])`,
+    'gi',
+  )
 
-  const regex = new RegExp(`(${pattern})`, 'gi')
-  const parts = text.split(regex)
+  const segments: Segment[] = []
+  let lastIndex = 0
 
-  return parts.map(part => {
-    const lower = part.toLowerCase()
+  for (const match of text.matchAll(regex)) {
+    const start   = match.index!
+    const matched = match[0]
+
+    if (start > lastIndex) {
+      segments.push({ text: text.slice(lastIndex, start), type: 'plain' })
+    }
+
+    const lower      = matched.toLowerCase()
     const isFrontend = FRONTEND_KEYWORDS.some(k => k.toLowerCase() === lower)
-    const isBackend  = BACKEND_KEYWORDS.some(k => k.toLowerCase() === lower)
-    if (isFrontend) return { text: part, type: 'frontend' }
-    if (isBackend)  return { text: part, type: 'backend' }
-    return { text: part, type: 'plain' }
-  })
+    segments.push({ text: matched, type: isFrontend ? 'frontend' : 'backend' })
+
+    lastIndex = start + matched.length
+  }
+
+  if (lastIndex < text.length) {
+    segments.push({ text: text.slice(lastIndex), type: 'plain' })
+  }
+
+  return segments
 }
 
-export function HighlightedDescription({ text }: { text: string }) {
+export function HighlightedDescription({ text }: { text: string | null | undefined }) {
+  if (!text) {
+    return (
+      <p className="text-sm text-gray-400 italic">No description available.</p>
+    )
+  }
+
   const segments = tokenize(text)
 
   return (
@@ -89,7 +113,7 @@ export function HighlightedDescription({ text }: { text: string }) {
         }
         return <span key={i}>{seg.text}</span>
       })}
-      {/* Legend */}
+
       <div className="flex gap-4 mt-5 pt-4 border-t border-gray-100">
         <span className="flex items-center gap-1.5 text-xs text-gray-500">
           <span className="inline-block w-3 h-3 rounded bg-green-200" /> Frontend / relevante
