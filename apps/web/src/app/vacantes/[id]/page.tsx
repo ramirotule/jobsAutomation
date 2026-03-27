@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { HighlightedDescription } from "@/components/HighlightedDescription";
 import { JobViewerButton } from "@/components/JobViewer";
 import { DeleteJobButton } from "@/components/DeleteJobButton";
+import { PostularButton } from "@/components/PostularButton";
 
 export default async function JobDetailPage({
   params,
@@ -54,14 +55,13 @@ export default async function JobDetailPage({
                 {job.applyUrl && (
                   <div className="flex items-center gap-2 shrink-0">
                     <JobViewerButton url={job.applyUrl} title={job.title} />
-                    <a
-                      href={job.applyUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="bg-blue-600 text-white text-sm font-medium px-5 py-2.5 rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                      Postular →
-                    </a>
+                    <PostularButton
+                      jobId={job.id}
+                      title={job.title}
+                      company={job.company}
+                      location={job.location ?? ''}
+                      applyUrl={job.applyUrl}
+                    />
                   </div>
                 )}
               </div>

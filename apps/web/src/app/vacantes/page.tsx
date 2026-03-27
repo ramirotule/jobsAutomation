@@ -348,7 +348,7 @@ function JobCard({
                 : 'bg-blue-600 text-white hover:bg-blue-700'
             }`}
           >
-            {isApplied ? 'Aplicado ✓' : 'Aplicar →'}
+            {isApplied ? 'Aplicado ✓' : 'Postular →'}
           </button>
         </div>
       </Link>
