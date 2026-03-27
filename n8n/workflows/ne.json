@@ -1,0 +1,173 @@
+{
+  "name": "Job Hunter V4 - Ultra Stable",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 2
+            }
+          ]
+        }
+      },
+      "id": "trigger",
+      "name": "Schedule - Every 2 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    seniority: 'senior',\n    targetRoles: ['Frontend Developer', 'Senior Frontend Developer', 'React Developer', 'React Native Developer', 'Full Stack Developer'],\n    primarySkills: ['React', 'React.js', 'React Native', 'TypeScript', 'JavaScript', 'Next.js'],\n    secondarySkills: ['Redux', 'GraphQL', 'Tailwind', 'Firebase', 'Node.js', 'MUI'],\n    preferredModality: 'remote',\n    location: 'Argentina',\n    minScoreThreshold: 60,\n    alertScoreThreshold: 75,\n    myEmail: 'ramirotule@gmail.com'\n  }\n}];"
+      },
+      "id": "config",
+      "name": "Config - My Profile",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://remoteok.com/api?tags=react,typescript,frontend",
+        "options": { "timeout": 15000 }
+      },
+      "id": "fetch-remoteok",
+      "name": "API - RemoteOK",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [450, 100],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://remotive.com/api/remote-jobs?category=software-dev&limit=40",
+        "options": { "timeout": 15000 }
+      },
+      "id": "fetch-remotive",
+      "name": "API - Remotive",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [450, 250],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://weworkremotely.com/categories/remote-programming-jobs.rss"
+      },
+      "id": "fetch-wwr",
+      "name": "RSS - WWR",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [450, 400],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nreturn items.map(item => {\n  const d = item.json;\n  if (d.error) return null;\n  \n  let external_id = String(d.id || d.guid || d.link || Math.random());\n  let title = d.title || d.position || 'Untitled';\n  let company = d.company || d.company_name || (d.title && d.title.includes(' at ') ? d.title.split(' at ')[1] : 'Unknown');\n  let description = d.description || d.content || d.summary || '';\n  let apply_url = d.url || d.link || '';\n  let posted_at = d.date || d.pubDate || d.publication_date || new Date().toISOString();\n  \n  return {\n    json: {\n      external_id,\n      title,\n      company,\n      description,\n      apply_url,\n      posted_at,\n      location: d.location || 'Remote',\n      source: apply_url.includes('remoteok') ? 'remoteok' : (apply_url.includes('remotive') ? 'remotive' : 'wwr')\n    }\n  };\n}).filter(i => i !== null);"
+      },
+      "id": "norm-logic",
+      "name": "Code - Normalize All",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 250]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "job_posts",
+        "returnAll": true,
+        "filters": { "conditions": [{ "keyName": "created_at", "condition": "gt", "keyValue": "={{$now.minus({days: 7}).toISO()}}" }] },
+        "outputColumns": ["external_id"]
+      },
+      "id": "db-existing",
+      "name": "DB - Get Existing IDs",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [700, 450]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "multiplex"
+      },
+      "id": "merge-node",
+      "name": "Merge - Wait for Both",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [950, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Deduplicación robusta\nconst newJobs = $('Code - Normalize All').getDocuments();\nlet existingIds = new Set();\n\ntry {\n  const existingData = $('DB - Get Existing IDs').getDocuments();\n  existingIds = new Set(existingData.map(d => String(d.json.external_id)));\n} catch (e) {\n  console.log('No hay IDs existentes o la DB está vacía');\n}\n\nreturn newJobs.filter(job => !existingIds.has(String(job.json.external_id)));"
+      },
+      "id": "dedup-fix",
+      "name": "Filter - Mass Deduplication",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1150, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const profile = $('Config - My Profile').first().json;\n\nreturn $input.all().map(item => {\n  const job = item.json;\n  let score = 0;\n  let reasons = [];\n\n  const titleLower = (job.title || '').toLowerCase();\n  const descLower = (job.description || '').toLowerCase();\n\n  if (profile.targetRoles.some(r => titleLower.includes(r.toLowerCase()))) {\n    score += 35;\n    reasons.push('Título coincide');\n  }\n\n  const matchedSkills = profile.primarySkills.filter(s => descLower.includes(s.toLowerCase()));\n  score += Math.min((matchedSkills.length / profile.primarySkills.length) * 45, 45);\n  if (matchedSkills.length > 0) reasons.push(`Skills: ${matchedSkills.join(', ')}`);\n\n  if (descLower.includes(profile.seniority.toLowerCase())) {\n    score += 20;\n    reasons.push(`Nivel ${profile.seniority} detectado`);\n  }\n\n  return {\n    json: {\n      ...job,\n      match_score: Math.min(Math.round(score), 100),\n      reasons,\n      is_hot_match: score >= profile.alertScoreThreshold\n    }\n  };\n});"
+      },
+      "id": "scoring-engine",
+      "name": "Code - Matching Engine",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1350, 300]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "tableId": "job_posts",
+        "fieldsUi": { "fieldValues": [{ "fieldId": "external_id", "fieldValue": "={{$json.external_id}}" },{ "fieldId": "title", "fieldValue": "={{$json.title}}" },{ "fieldId": "company", "fieldValue": "={{$json.company}}" },{ "fieldId": "apply_url", "fieldValue": "={{$json.apply_url}}" }] }
+      },
+      "id": "db-save",
+      "name": "DB - Insert Job",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1600, 400]
+    },
+    {
+      "parameters": {
+        "conditions": { "boolean": [{ "value1": "={{$json.is_hot_match}}", "value2": true }] }
+      },
+      "id": "filter-hot",
+      "name": "Filter - High Score Only",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 1,
+      "position": [1600, 200]
+    },
+    {
+      "parameters": {
+        "fromEmail": "Job Hunter Bot <noreply@ai.com>",
+        "toEmail": "={{$('Config - My Profile').first().json.myEmail}}",
+        "subject": "={{ '🎯 Match ' + $json.match_score + '%: ' + $json.title + ' @ ' + $json.company }}",
+        "html": "={{ '<div style=\"font-family: Arial; padding: 20px; border: 1px solid #eee; border-radius: 10px;\">' + '<h1 style=\"color: #2563eb;\">🎯 Nuevo Match Localizado</h1>' + '<p style=\"font-size: 1.2em;\"><strong>Puesto:</strong> ' + $json.title + '</p>' + '<p><strong>Empresa:</strong> ' + $json.company + '</p>' + '<div style=\"background: #f0fdf4; padding: 10px; border-radius: 5px; color: #166534;\"><strong>Match Score: ' + $json.match_score + '%</strong></div>' + '<p><strong>Por qué coincide:</strong> ' + $json.reasons.join(' • ') + '</p>' + '<p><strong>Ubicación:</strong> ' + $json.location + '</p>' + '<br><a href=\"' + $json.apply_url + '\" style=\"background: #2563eb; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;\">Postularme ahora</a>' + '</div>' }}",
+        "options": {}
+      },
+      "id": "email-node",
+      "name": "Email - Send Alert",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1850, 200]
+    }
+  ],
+  "connections": {
+    "Schedule - Every 2 Hours": { "main": [[{ "node": "Config - My Profile", "type": "main", "index": 0 }]] },
+    "Config - My Profile": { "main": [[{ "node": "API - RemoteOK", "type": "main", "index": 0 }], [{ "node": "API - Remotive", "type": "main", "index": 0 }], [{ "node": "RSS - WWR", "type": "main", "index": 0 }], [{ "node": "db-existing", "type": "main", "index": 0 }]] },
+    "API - RemoteOK": { "main": [[{ "node": "Code - Normalize All", "type": "main", "index": 0 }]] },
+    "API - Remotive": { "main": [[{ "node": "Code - Normalize All", "type": "main", "index": 0 }]] },
+    "RSS - WWR": { "main": [[{ "node": "Code - Normalize All", "type": "main", "index": 0 }]] },
+    "Code - Normalize All": { "main": [[{ "node": "merge-node", "type": "main", "index": 0 }]] },
+    "db-existing": { "main": [[{ "node": "merge-node", "type": "main", "index": 1 }]] },
+    "merge-node": { "main": [[{ "node": "dedup-fix", "type": "main", "index": 0 }]] },
+    "dedup-fix": { "main": [[{ "node": "scoring-engine", "type": "main", "index": 0 }]] },
+    "scoring-engine": { "main": [[{ "node": "db-save", "type": "main", "index": 0 }], [{ "node": "filter-hot", "type": "main", "index": 0 }]] },
+    "filter-hot": { "main": [[{ "node": "email-node", "type": "main", "index": 0 }]] }
+  }
+}

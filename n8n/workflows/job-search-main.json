@@ -1,0 +1,403 @@
+{
+  "name": "Job Hunter — Main Search",
+  "nodes": [
+
+    {
+      "id": "trigger-cron",
+      "name": "Cron — Cada 2 horas",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [100, 300],
+      "parameters": {
+        "rule": { "interval": [{ "field": "hours", "hoursInterval": 2 }] }
+      }
+    },
+
+    {
+      "id": "get-profile",
+      "name": "Supabase — Get Search Profile",
+      "type": "n8n-nodes-base.supabase",
+      "position": [300, 300],
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "search_profiles",
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            { "keyName": "is_active", "condition": "eq", "keyValue": true }
+          ]
+        },
+        "limit": 1
+      }
+    },
+
+    {
+      "id": "split-sources",
+      "name": "Split — Por fuente",
+      "type": "n8n-nodes-base.splitInBatches",
+      "position": [500, 300],
+      "parameters": { "batchSize": 1 }
+    },
+
+    {
+      "id": "fetch-remoteok",
+      "name": "HTTP — RemoteOK API",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [700, 100],
+      "parameters": {
+        "method": "GET",
+        "url": "https://remoteok.com/api?tags=react,typescript,frontend,react-native",
+        "headers": {
+          "parameters": [{ "name": "User-Agent", "value": "JobHunterBot/1.0" }]
+        },
+        "options": { "timeout": 15000 }
+      }
+    },
+
+    {
+      "id": "fetch-remotive",
+      "name": "HTTP — Remotive API",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [700, 250],
+      "parameters": {
+        "method": "GET",
+        "url": "https://remotive.com/api/remote-jobs?category=software-dev&limit=50",
+        "options": { "timeout": 15000 }
+      }
+    },
+
+    {
+      "id": "fetch-wwr",
+      "name": "RSS — We Work Remotely",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "position": [700, 400],
+      "parameters": {
+        "url": "https://weworkremotely.com/categories/remote-programming-jobs.rss"
+      }
+    },
+
+    {
+      "id": "fetch-workingnomads",
+      "name": "HTTP — Working Nomads",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [700, 550],
+      "parameters": {
+        "method": "GET",
+        "url": "https://www.workingnomads.com/api/exposed_jobs/?category=development&tags=react,frontend,javascript",
+        "options": { "timeout": 15000 }
+      }
+    },
+
+    {
+      "id": "normalize-remoteok",
+      "name": "Code — Normalizar RemoteOK",
+      "type": "n8n-nodes-base.code",
+      "position": [950, 100],
+      "parameters": {
+        "jsCode": "// RemoteOK devuelve array, primer elemento es metadata\nconst jobs = $input.first().json;\nconst items = Array.isArray(jobs) ? jobs.slice(1) : [];\n\nreturn items.map(job => ({\n  json: {\n    source_slug:    'remoteok',\n    external_id:    String(job.id),\n    title:          job.position || '',\n    company:        job.company  || '',\n    description:    job.description || '',\n    location:       'Remote',\n    modality:       'remote',\n    seniority:      inferSeniority(job.position + ' ' + job.description),\n    required_skills: (job.tags || []).map(t => t.trim()),\n    apply_url:      job.url || `https://remoteok.com/l/${job.id}`,\n    posted_at:      job.date ? new Date(job.date).toISOString() : new Date().toISOString(),\n    salary_min:     job.salary_min ? parseInt(job.salary_min) : null,\n    salary_max:     job.salary_max ? parseInt(job.salary_max) : null,\n    salary_currency: 'USD',\n    salary_period:  'yearly',\n  }\n}));\n\nfunction inferSeniority(text) {\n  const t = (text || '').toLowerCase();\n  if (/\\b(staff|principal)\\b/.test(t))     return 'staff';\n  if (/\\b(lead|tech lead)\\b/.test(t))      return 'lead';\n  if (/\\b(senior|sr\\.?)\\b/.test(t))        return 'senior';\n  if (/\\b(mid|middle|pleno)\\b/.test(t))    return 'mid';\n  if (/\\b(junior|jr\\.?|entry)\\b/.test(t)) return 'junior';\n  return 'unknown';\n}"
+      }
+    },
+
+    {
+      "id": "normalize-remotive",
+      "name": "Code — Normalizar Remotive",
+      "type": "n8n-nodes-base.code",
+      "position": [950, 250],
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst jobs = data.jobs || [];\n\nreturn jobs.map(job => ({\n  json: {\n    source_slug:    'remotive',\n    external_id:    String(job.id),\n    title:          job.title || '',\n    company:        job.company_name || '',\n    description:    job.description || '',\n    location:       job.candidate_required_location || 'Worldwide',\n    modality:       'remote',\n    seniority:      inferSeniority(job.title + ' ' + job.description),\n    required_skills: (job.tags || []),\n    apply_url:      job.url || '',\n    posted_at:      job.publication_date || new Date().toISOString(),\n    salary_min:     null,\n    salary_max:     null,\n    salary_currency: 'USD',\n    salary_period:  'yearly',\n  }\n}));\n\nfunction inferSeniority(text) {\n  const t = (text || '').toLowerCase();\n  if (/\\b(staff|principal)\\b/.test(t))     return 'staff';\n  if (/\\b(lead|tech lead)\\b/.test(t))      return 'lead';\n  if (/\\b(senior|sr\\.?)\\b/.test(t))        return 'senior';\n  if (/\\b(mid|middle|pleno)\\b/.test(t))    return 'mid';\n  if (/\\b(junior|jr\\.?|entry)\\b/.test(t)) return 'junior';\n  return 'unknown';\n}"
+      }
+    },
+
+    {
+      "id": "normalize-wwr",
+      "name": "Code — Normalizar WWR RSS",
+      "type": "n8n-nodes-base.code",
+      "position": [950, 400],
+      "parameters": {
+        "jsCode": "return $input.all().map(item => {\n  const data = item.json;\n  return {\n    json: {\n      source_slug:    'wwr',\n      external_id:    data.guid || data.link,\n      title:          data.title || '',\n      company:        (data.title || '').split(' at ')[1] || '',\n      description:    data.content || data.summary || '',\n      location:       'Remote',\n      modality:       'remote',\n      seniority:      inferSeniority(data.title || ''),\n      required_skills: extractSkills(data.content || ''),\n      apply_url:      data.link || '',\n      posted_at:      data.pubDate || new Date().toISOString(),\n      salary_min:     null,\n      salary_max:     null,\n      salary_currency: 'USD',\n      salary_period:  'yearly',\n    }\n  };\n});\n\nfunction inferSeniority(text) {\n  const t = (text || '').toLowerCase();\n  if (/\\b(senior|sr\\.?)\\b/.test(t)) return 'senior';\n  if (/\\b(mid|middle)\\b/.test(t))   return 'mid';\n  if (/\\b(junior|jr\\.?)\\b/.test(t)) return 'junior';\n  return 'unknown';\n}\n\nfunction extractSkills(text) {\n  const t = text.toLowerCase();\n  const known = ['react', 'react native', 'typescript', 'javascript', 'next.js',\n    'graphql', 'node.js', 'redux', 'tailwind', 'css', 'html'];\n  return known.filter(s => t.includes(s));\n}"
+      }
+    },
+
+    {
+      "id": "normalize-workingnomads",
+      "name": "Code — Normalizar WorkingNomads",
+      "type": "n8n-nodes-base.code",
+      "position": [950, 550],
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst jobs = Array.isArray(data) ? data : (data.jobs || []);\n\nreturn jobs.map(job => ({\n  json: {\n    source_slug:    'workingnomads',\n    external_id:    String(job.id),\n    title:          job.title || '',\n    company:        job.company || '',\n    description:    job.description || '',\n    location:       'Remote',\n    modality:       'remote',\n    seniority:      inferSeniority(job.title || ''),\n    required_skills: [],\n    apply_url:      job.url || '',\n    posted_at:      job.pub_date || new Date().toISOString(),\n    salary_min:     null,\n    salary_max:     null,\n    salary_currency: 'USD',\n    salary_period:  'yearly',\n  }\n}));\n\nfunction inferSeniority(text) {\n  const t = (text || '').toLowerCase();\n  if (/\\b(senior|sr\\.?)\\b/.test(t)) return 'senior';\n  if (/\\b(mid|middle)\\b/.test(t))   return 'mid';\n  if (/\\b(junior|jr\\.?)\\b/.test(t)) return 'junior';\n  return 'unknown';\n}"
+      }
+    },
+
+    {
+      "id": "merge-jobs",
+      "name": "Merge — Todas las fuentes",
+      "type": "n8n-nodes-base.merge",
+      "position": [1200, 300],
+      "parameters": {
+        "mode": "append"
+      }
+    },
+
+    {
+      "id": "dedup-check",
+      "name": "Supabase — Check Duplicados",
+      "type": "n8n-nodes-base.supabase",
+      "position": [1400, 300],
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "job_posts",
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            { "keyName": "external_id", "condition": "eq", "keyValue": "={{ $json.external_id }}" }
+          ]
+        },
+        "limit": 1
+      }
+    },
+
+    {
+      "id": "filter-new-only",
+      "name": "Filter — Solo vacantes nuevas",
+      "type": "n8n-nodes-base.filter",
+      "position": [1600, 300],
+      "parameters": {
+        "conditions": {
+          "number": [{ "value1": "={{ $json.length }}", "operation": "equal", "value2": 0 }]
+        }
+      }
+    },
+
+    {
+      "id": "get-source-id",
+      "name": "Supabase — Get Source ID",
+      "type": "n8n-nodes-base.supabase",
+      "position": [1800, 300],
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "job_sources",
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            { "keyName": "name", "condition": "eq", "keyValue": "={{ $json.source_slug }}" }
+          ]
+        },
+        "limit": 1
+      }
+    },
+
+    {
+      "id": "insert-job-post",
+      "name": "Supabase — Insert Job Post",
+      "type": "n8n-nodes-base.supabase",
+      "position": [2000, 300],
+      "parameters": {
+        "operation": "create",
+        "tableId": "job_posts",
+        "fieldsUi": {
+          "fieldValues": [
+            { "fieldId": "source_id",         "fieldValue": "={{ $json.id }}" },
+            { "fieldId": "external_id",        "fieldValue": "={{ $('filter-new-only').item.json.external_id }}" },
+            { "fieldId": "title",              "fieldValue": "={{ $('filter-new-only').item.json.title }}" },
+            { "fieldId": "company",            "fieldValue": "={{ $('filter-new-only').item.json.company }}" },
+            { "fieldId": "description",        "fieldValue": "={{ $('filter-new-only').item.json.description }}" },
+            { "fieldId": "location",           "fieldValue": "={{ $('filter-new-only').item.json.location }}" },
+            { "fieldId": "modality",           "fieldValue": "={{ $('filter-new-only').item.json.modality }}" },
+            { "fieldId": "seniority",          "fieldValue": "={{ $('filter-new-only').item.json.seniority }}" },
+            { "fieldId": "required_skills",    "fieldValue": "={{ $('filter-new-only').item.json.required_skills }}" },
+            { "fieldId": "apply_url",          "fieldValue": "={{ $('filter-new-only').item.json.apply_url }}" },
+            { "fieldId": "posted_at",          "fieldValue": "={{ $('filter-new-only').item.json.posted_at }}" },
+            { "fieldId": "salary_min",         "fieldValue": "={{ $('filter-new-only').item.json.salary_min }}" },
+            { "fieldId": "salary_max",         "fieldValue": "={{ $('filter-new-only').item.json.salary_max }}" },
+            { "fieldId": "salary_currency",    "fieldValue": "={{ $('filter-new-only').item.json.salary_currency }}" }
+          ]
+        }
+      }
+    },
+
+    {
+      "id": "run-matching",
+      "name": "Code — Algoritmo de Matching",
+      "type": "n8n-nodes-base.code",
+      "position": [2200, 300],
+      "parameters": {
+        "jsCode": "// Perfil de Ramiro (hardcoded para MVP — luego viene de Supabase)\nconst PROFILE = {\n  seniority: 'senior',\n  targetRoles: ['Frontend Developer','Senior Frontend Developer','React Developer','React Native Developer','Full Stack Developer'],\n  primarySkills: ['React.js','React Native','TypeScript','JavaScript'],\n  secondarySkills: ['Redux Toolkit','GraphQL','Material UI','Firebase','Next.js','Tailwind CSS'],\n  preferredModality: 'remote',\n  location: 'Santa Rosa, La Pampa, Argentina',\n  languages: [{ lang: 'Spanish', level: 'native' },{ lang: 'English', level: 'B2' }],\n  minScoreThreshold: 60,\n  alertScoreThreshold: 75,\n};\n\nconst job = $input.first().json;\n\n// --- Title match (0-20) ---\nfunction scoreTitle(title, roles) {\n  const t = title.toLowerCase();\n  for (const r of roles) {\n    const rl = r.toLowerCase();\n    if (t === rl) return 20;\n    if (t.includes(rl) || rl.includes(t)) return 15;\n  }\n  const words = new Set(t.split(/\\s+/));\n  const best = roles.reduce((b, r) => {\n    const rw = r.toLowerCase().split(/\\s+/);\n    const overlap = rw.filter(w => words.has(w) && w.length > 2).length;\n    return Math.max(b, overlap / rw.length);\n  }, 0);\n  if (best >= 0.5) return 10;\n  if (best > 0) return 5;\n  return 0;\n}\n\n// --- Skills match (0-35) ---\nfunction normalize(s) { return s.toLowerCase().trim().replace(/[^a-z0-9 .]/g,''); }\nfunction skillsMatch(a, b) {\n  const na = normalize(a), nb = normalize(b);\n  return na === nb || na.includes(nb) || nb.includes(na);\n}\nfunction scoreSkills(required, primary, secondary) {\n  if (!required || required.length === 0) return 18;\n  const all = [...primary, ...secondary];\n  const matched = required.filter(r => all.some(p => skillsMatch(r, p)));\n  const missing = required.filter(r => !all.some(p => skillsMatch(r, p)));\n  const ratio = matched.length / required.length;\n  const bonus = required.some(r => primary.some(p => skillsMatch(r, p))) ? 5 : 0;\n  return { score: Math.min(Math.round(35 * ratio) + bonus, 35), matched, missing };\n}\n\n// --- Seniority (0-15) ---\nconst LEVELS = { junior:1, mid:2, senior:3, staff:4, lead:5, unknown:0 };\nfunction scoreSeniority(jobSen, profSen) {\n  if (jobSen === 'unknown') return 9;\n  const diff = Math.abs((LEVELS[jobSen]||0) - (LEVELS[profSen]||0));\n  if (diff === 0) return 15;\n  if (diff === 1) return 9;\n  if (diff === 2) return 3;\n  return 0;\n}\n\n// --- Modality (0-15) ---\nfunction scoreModality(jobMod) {\n  if (jobMod === 'remote') return 15;\n  if (jobMod === 'hybrid') return 10;\n  return 0;\n}\n\n// --- Location (0-10) ---\nfunction scoreLocation(loc, mod) {\n  if (mod === 'remote') return 10;\n  const l = (loc||'').toLowerCase();\n  if (l.includes('argentina')) return 10;\n  if (l.includes('latam') || l.includes('latin america')) return 7;\n  return 0;\n}\n\n// --- Language (0-5) ---\nfunction scoreLanguage(desc, languages) {\n  const d = (desc||'').toLowerCase();\n  if (!/english|inglés/.test(d)) return 5;\n  const en = languages.find(l => l.lang.toLowerCase() === 'english');\n  if (!en) return 0;\n  const lvl = { B2:3, C1:4, C2:5, native:6, B1:2, A2:1, A1:0 }[en.level] || 0;\n  return lvl >= 3 ? 5 : (lvl === 2 ? 3 : 0);\n}\n\n// Calcular\nconst titleScore    = scoreTitle(job.title, PROFILE.targetRoles);\nconst skillsResult  = scoreSkills(job.required_skills, PROFILE.primarySkills, PROFILE.secondarySkills);\nconst skillsScore   = typeof skillsResult === 'number' ? skillsResult : skillsResult.score;\nconst matched       = typeof skillsResult === 'number' ? [] : skillsResult.matched;\nconst missing       = typeof skillsResult === 'number' ? [] : skillsResult.missing;\nconst seniorityScore = scoreSeniority(job.seniority, PROFILE.seniority);\nconst modalityScore = scoreModality(job.modality);\nconst locationScore = scoreLocation(job.location, job.modality);\nconst languageScore = scoreLanguage(job.description, PROFILE.languages);\n\nconst total = titleScore + skillsScore + seniorityScore + modalityScore + locationScore + languageScore;\n\nconst reasons = [];\nif (titleScore >= 15)       reasons.push('Título coincide con tu perfil');\nif (matched.length > 0)     reasons.push(`Skills: ${matched.slice(0,4).join(', ')}`);\nif (seniorityScore === 15)  reasons.push(`Seniority exacto (${job.seniority})`);\nif (modalityScore === 15)   reasons.push('Modalidad remota');\nif (languageScore === 5)    reasons.push('Inglés aceptado (B2+)');\n\nconst flags = [];\nif (!job.salary_min && !job.salary_max)  flags.push('Salario no especificado');\nif (job.seniority === 'unknown')         flags.push('Seniority no claro');\nif (missing.length > 2)                 flags.push(`Skills faltantes: ${missing.slice(0,3).join(', ')}`);\n\nreturn [{\n  json: {\n    ...job,\n    match: {\n      score: total,\n      breakdown: { title: titleScore, skills: skillsScore, seniority: seniorityScore, modality: modalityScore, location: locationScore, language: languageScore },\n      match_reasons: reasons,\n      flags,\n      above_threshold: total >= PROFILE.minScoreThreshold,\n      above_alert: total >= PROFILE.alertScoreThreshold,\n    }\n  }\n}];"
+      }
+    },
+
+    {
+      "id": "filter-by-threshold",
+      "name": "Filter — Score >= 60",
+      "type": "n8n-nodes-base.filter",
+      "position": [2400, 300],
+      "parameters": {
+        "conditions": {
+          "boolean": [{ "value1": "={{ $json.match.above_threshold }}", "operation": "true" }]
+        }
+      }
+    },
+
+    {
+      "id": "insert-match",
+      "name": "Supabase — Insert Job Match",
+      "type": "n8n-nodes-base.supabase",
+      "position": [2600, 300],
+      "parameters": {
+        "operation": "create",
+        "tableId": "job_matches",
+        "fieldsUi": {
+          "fieldValues": [
+            { "fieldId": "job_post_id",       "fieldValue": "={{ $json.id }}" },
+            { "fieldId": "score",             "fieldValue": "={{ $json.match.score }}" },
+            { "fieldId": "score_breakdown",   "fieldValue": "={{ JSON.stringify($json.match.breakdown) }}" },
+            { "fieldId": "match_reasons",     "fieldValue": "={{ $json.match.match_reasons }}" },
+            { "fieldId": "flags",             "fieldValue": "={{ $json.match.flags }}" },
+            { "fieldId": "status",            "fieldValue": "pending" },
+            { "fieldId": "is_notified",       "fieldValue": false }
+          ]
+        }
+      }
+    },
+
+    {
+      "id": "filter-alert",
+      "name": "Filter — Score >= 75 (alerta)",
+      "type": "n8n-nodes-base.filter",
+      "position": [2800, 300],
+      "parameters": {
+        "conditions": {
+          "boolean": [{ "value1": "={{ $('run-matching').item.json.match.above_alert }}", "operation": "true" }]
+        }
+      }
+    },
+
+    {
+      "id": "telegram-alert",
+      "name": "Telegram — Alerta de match",
+      "type": "n8n-nodes-base.telegram",
+      "position": [3000, 200],
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "={{ '🎯 Match score ' + $('run-matching').item.json.match.score + '/100\\n\\n💼 ' + $('run-matching').item.json.title + '\\n🏢 ' + $('run-matching').item.json.company + '\\n🌐 ' + $('run-matching').item.json.modality + '\\n\\n✓ ' + $('run-matching').item.json.match.match_reasons.join('\\n✓ ') + '\\n\\n🔗 ' + $('run-matching').item.json.apply_url }}"
+      }
+    },
+
+    {
+      "id": "log-activity",
+      "name": "Supabase — Log actividad",
+      "type": "n8n-nodes-base.supabase",
+      "position": [3000, 400],
+      "parameters": {
+        "operation": "create",
+        "tableId": "activity_logs",
+        "fieldsUi": {
+          "fieldValues": [
+            { "fieldId": "action",      "fieldValue": "job_matched" },
+            { "fieldId": "entity_type", "fieldValue": "job_match" },
+            { "fieldId": "entity_id",   "fieldValue": "={{ $json.id }}" },
+            { "fieldId": "metadata",    "fieldValue": "={{ JSON.stringify({ score: $('run-matching').item.json.match.score, title: $('run-matching').item.json.title, company: $('run-matching').item.json.company, source: $('run-matching').item.json.source_slug }) }}" }
+          ]
+        }
+      }
+    },
+
+    {
+      "id": "update-source-timestamp",
+      "name": "Supabase — Update last_fetched_at",
+      "type": "n8n-nodes-base.supabase",
+      "position": [3200, 300],
+      "parameters": {
+        "operation": "update",
+        "tableId": "job_sources",
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            { "keyName": "name", "condition": "eq", "keyValue": "={{ $('filter-new-only').item.json.source_slug }}" }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            { "fieldId": "last_fetched_at", "fieldValue": "={{ new Date().toISOString() }}" }
+          ]
+        }
+      }
+    },
+
+    {
+      "id": "error-handler",
+      "name": "Code — Error Handler",
+      "type": "n8n-nodes-base.code",
+      "position": [1400, 500],
+      "parameters": {
+        "jsCode": "// Registrar errores sin romper el workflow\nconst error = $input.first().json;\nconsole.error('Workflow error:', JSON.stringify(error));\nreturn [{ json: { error: true, message: error.message || 'Unknown error', timestamp: new Date().toISOString() } }];"
+      }
+    }
+
+  ],
+
+  "connections": {
+    "Cron — Cada 2 horas": {
+      "main": [[{ "node": "Supabase — Get Search Profile", "type": "main", "index": 0 }]]
+    },
+    "Supabase — Get Search Profile": {
+      "main": [[
+        { "node": "HTTP — RemoteOK API",      "type": "main", "index": 0 },
+        { "node": "HTTP — Remotive API",      "type": "main", "index": 0 },
+        { "node": "RSS — We Work Remotely",   "type": "main", "index": 0 },
+        { "node": "HTTP — Working Nomads",    "type": "main", "index": 0 }
+      ]]
+    },
+    "HTTP — RemoteOK API":    { "main": [[{ "node": "Code — Normalizar RemoteOK",      "type": "main", "index": 0 }]] },
+    "HTTP — Remotive API":    { "main": [[{ "node": "Code — Normalizar Remotive",      "type": "main", "index": 0 }]] },
+    "RSS — We Work Remotely": { "main": [[{ "node": "Code — Normalizar WWR RSS",       "type": "main", "index": 0 }]] },
+    "HTTP — Working Nomads":  { "main": [[{ "node": "Code — Normalizar WorkingNomads", "type": "main", "index": 0 }]] },
+    "Code — Normalizar RemoteOK":      { "main": [[{ "node": "Merge — Todas las fuentes", "type": "main", "index": 0 }]] },
+    "Code — Normalizar Remotive":      { "main": [[{ "node": "Merge — Todas las fuentes", "type": "main", "index": 1 }]] },
+    "Code — Normalizar WWR RSS":       { "main": [[{ "node": "Merge — Todas las fuentes", "type": "main", "index": 2 }]] },
+    "Code — Normalizar WorkingNomads": { "main": [[{ "node": "Merge — Todas las fuentes", "type": "main", "index": 3 }]] },
+    "Merge — Todas las fuentes": {
+      "main": [[{ "node": "Supabase — Check Duplicados", "type": "main", "index": 0 }]]
+    },
+    "Supabase — Check Duplicados": {
+      "main": [[{ "node": "Filter — Solo vacantes nuevas", "type": "main", "index": 0 }]]
+    },
+    "Filter — Solo vacantes nuevas": {
+      "main": [[{ "node": "Supabase — Get Source ID", "type": "main", "index": 0 }]]
+    },
+    "Supabase — Get Source ID": {
+      "main": [[{ "node": "Supabase — Insert Job Post", "type": "main", "index": 0 }]]
+    },
+    "Supabase — Insert Job Post": {
+      "main": [[{ "node": "Code — Algoritmo de Matching", "type": "main", "index": 0 }]]
+    },
+    "Code — Algoritmo de Matching": {
+      "main": [[{ "node": "Filter — Score >= 60", "type": "main", "index": 0 }]]
+    },
+    "Filter — Score >= 60": {
+      "main": [[{ "node": "Supabase — Insert Job Match", "type": "main", "index": 0 }]]
+    },
+    "Supabase — Insert Job Match": {
+      "main": [[
+        { "node": "Filter — Score >= 75 (alerta)", "type": "main", "index": 0 },
+        { "node": "Supabase — Log actividad",      "type": "main", "index": 0 }
+      ]]
+    },
+    "Filter — Score >= 75 (alerta)": {
+      "main": [[{ "node": "Telegram — Alerta de match", "type": "main", "index": 0 }]]
+    },
+    "Telegram — Alerta de match": {
+      "main": [[{ "node": "Supabase — Update last_fetched_at", "type": "main", "index": 0 }]]
+    }
+  },
+
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "error-handler"
+  },
+
+  "meta": {
+    "description": "Búsqueda automática de empleo cada 2 horas. Fuentes: RemoteOK, Remotive, WWR, WorkingNomads. Normalización → Dedup → Matching → Supabase → Telegram.",
+    "version": "1.0.0"
+  }
+}

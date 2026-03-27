@@ -1,0 +1,170 @@
+{
+  "name": "Job Hunter V6 - JSearch",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "hours", "hoursInterval": 6 }] }
+      },
+      "id": "trigger",
+      "name": "Schedule - Every 6 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { myEmail: 'ramirotule@gmail.com', alertThreshold: 55 } }];"
+      },
+      "id": "config",
+      "name": "Config - My Profile",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://jsearch.p.rapidapi.com/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-RapidAPI-Key",  "value": "={{ $env.JSEARCH_API_KEY }}" },
+            { "name": "X-RapidAPI-Host", "value": "jsearch.p.rapidapi.com" }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "query",            "value": "React Developer OR Frontend Developer OR React Native Developer" },
+            { "name": "num_pages",        "value": "3" },
+            { "name": "remote_jobs_only", "value": "true" },
+            { "name": "date_posted",      "value": "week" }
+          ]
+        },
+        "options": { "timeout": 20000 }
+      },
+      "id": "fetch-jsearch",
+      "name": "API - JSearch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [450, 300],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = [];\n\nfunction stripHtml(str) {\n  return (str || '').replace(/<[^>]*>/g, ' ').replace(/\\s+/g, ' ').trim().slice(0, 3000);\n}\n\nfor (const item of $input.all()) {\n  const d = item.json;\n  if (!d || d.error) continue;\n  if (d.data && Array.isArray(d.data)) {\n    for (const j of d.data) {\n      if (!j.job_id || !j.job_title) continue;\n      results.push({\n        json: {\n          external_id: 'js_' + j.job_id,\n          title:       j.job_title,\n          company:     j.employer_name || 'Unknown',\n          description: stripHtml(j.job_description || ''),\n          apply_url:   j.job_apply_link || j.job_google_link || '',\n          posted_at:   j.job_posted_at_timestamp\n            ? new Date(j.job_posted_at_timestamp * 1000).toISOString()\n            : new Date().toISOString(),\n          location:    j.job_is_remote ? 'Remote' : [j.job_city, j.job_country].filter(Boolean).join(', '),\n          source:      'jsearch'\n        }\n      });\n    }\n  }\n}\n\nreturn results;"
+      },
+      "id": "norm-logic",
+      "name": "Code - Normalize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "job_posts",
+        "returnAll": true,
+        "filters": { "conditions": [{ "keyName": "created_at", "condition": "gt", "keyValue": "={{$now.minus({days: 7}).toISO()}}" }] },
+        "outputColumns": ["external_id"]
+      },
+      "id": "db-existing",
+      "name": "DB - Get Existing IDs",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "alwaysOutputData": true,
+      "position": [680, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "const newJobs = $('Code - Normalize').all();\nlet existingIds = new Set();\ntry {\n  const existing = $('DB - Get Existing IDs').all();\n  existingIds = new Set(existing.map(d => String(d.json.external_id)));\n} catch (e) {}\n\nreturn newJobs.filter(job => {\n  const id = String(job.json.external_id);\n  return id && id !== 'undefined' && !existingIds.has(id);\n});"
+      },
+      "id": "dedup",
+      "name": "Filter - Deduplication",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [920, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ── Listas de descalificación ──────────────────────────────────────────\nconst BACKEND_TITLE_DQ = [\n  '.net', 'c#', 'c sharp', 'java developer', 'java engineer',\n  'python developer', 'python engineer', 'ruby developer', 'ruby engineer',\n  'backend developer', 'backend engineer', 'backend dev',\n  'devops', 'site reliability', 'sre', 'cloud engineer', 'cloud architect',\n  'data engineer', 'data scientist', 'ml engineer', 'machine learning',\n  'golang', 'go developer', 'rust developer', 'scala developer',\n  'php developer', 'laravel developer', 'django developer', 'wordpress developer',\n  'ios developer', 'ios engineer', 'android developer', 'android engineer',\n  'kotlin developer', 'swift developer',\n  'qa engineer', 'qa analyst', 'quality assurance', 'test engineer', 'sdet',\n  'blockchain developer', 'solidity', 'embedded', 'firmware'\n];\n\nconst BACKEND_DESC_HEAVY = [\n  'asp.net', '.net core', 'spring boot', 'spring framework',\n  'django', 'flask', 'laravel', 'ruby on rails',\n  'hibernate', 'entity framework',\n  'kafka', 'rabbitmq', 'kubernetes',\n  'sql server', 'oracle database', 'pl/sql'\n];\n\n// ── Señales positivas ───────────────────────────────────────────────────\nconst FRONTEND_TITLE_SIGNALS = [\n  'frontend', 'front-end', 'front end',\n  'react', 'react native', 'react.js', 'reactjs',\n  'ui developer', 'ui engineer',\n  'javascript developer', 'js developer', 'typescript developer',\n  'next.js', 'nextjs', 'angular developer', 'vue developer',\n  'web developer', 'web engineer', 'mobile developer'\n];\n\nconst PRIMARY_SKILLS   = ['react', 'react.js', 'react native', 'typescript', 'javascript', 'next.js'];\nconst SECONDARY_SKILLS = ['redux', 'graphql', 'tailwind', 'firebase', 'node.js', 'mui', 'material-ui', 'expo', 'webpack', 'vite', 'css', 'html5'];\n\nconst ALERT_THRESHOLD = 55;\n\n// ── Matching ────────────────────────────────────────────────────────────\nreturn $input.all().map(function(item) {\n  const job     = item.json;\n  const title   = (job.title || '').toLowerCase();\n  const desc    = (job.description || '').toLowerCase();\n  const combined = title + ' ' + desc;\n\n  // 1. Descalificar: backend en título\n  const backendTitleHit = BACKEND_TITLE_DQ.find(t => title.includes(t));\n  if (backendTitleHit) {\n    return { json: { ...job, match_score: 0, reasons: ['Backend en título: ' + backendTitleHit], is_hot_match: false } };\n  }\n\n  // 2. Descalificar: sin señal frontend en título NI skill primaria en desc\n  const hasFrontendTitle = FRONTEND_TITLE_SIGNALS.some(s => title.includes(s));\n  const primaryInDesc    = PRIMARY_SKILLS.filter(s => desc.includes(s));\n  if (!hasFrontendTitle && primaryInDesc.length === 0) {\n    return { json: { ...job, match_score: 0, reasons: ['Sin señal frontend'], is_hot_match: false } };\n  }\n\n  // 3. Descalificar: descripción backend-heavy (3+ señales)\n  const backendDescHits = BACKEND_DESC_HEAVY.filter(t => combined.includes(t));\n  if (backendDescHits.length >= 3) {\n    return { json: { ...job, match_score: 0, reasons: ['Backend-heavy: ' + backendDescHits.slice(0, 2).join(', ')], is_hot_match: false } };\n  }\n\n  // ── Scoring ─────────────────────────────────────────────────────────\n  let score = 0;\n  const reasons = [];\n\n  // Título frontend genérico (+20)\n  if (hasFrontendTitle) {\n    score += 20;\n    reasons.push('Frontend en título');\n  }\n\n  // React específico en título (+15 extra)\n  if (title.includes('react')) {\n    score += 15;\n    reasons.push('React en título');\n  }\n\n  // Skills primarias en descripción (hasta +35)\n  const primaryScore = Math.round((primaryInDesc.length / PRIMARY_SKILLS.length) * 35);\n  score += primaryScore;\n  if (primaryInDesc.length > 0) {\n    reasons.push('Skills: ' + primaryInDesc.slice(0, 4).join(', '));\n  }\n\n  // Skills secundarias (hasta +10)\n  const secondaryMatched = SECONDARY_SKILLS.filter(s => combined.includes(s));\n  score += Math.min(secondaryMatched.length * 2, 10);\n\n  // Seniority (+15)\n  if (title.includes('senior') || title.includes('sr.') || title.includes('sr ') ||\n      desc.includes('5+ years') || desc.includes('5 years') || desc.includes('senior')) {\n    score += 15;\n    reasons.push('Senior');\n  }\n\n  // Remote (+5)\n  if (combined.includes('remote') || (job.location || '').toLowerCase().includes('remote')) {\n    score += 5;\n    reasons.push('Remote');\n  }\n\n  const finalScore = Math.min(Math.round(score), 100);\n\n  return {\n    json: {\n      ...job,\n      match_score: finalScore,\n      reasons,\n      flags: primaryInDesc,\n      is_hot_match: finalScore >= ALERT_THRESHOLD\n    }\n  };\n});"
+      },
+      "id": "scoring",
+      "name": "Code - Matching Engine",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1150, 300]
+    },
+    {
+      "parameters": {
+        "conditions": { "number": [{ "value1": "={{$json.match_score}}", "operation": "larger", "value2": 0 }] }
+      },
+      "id": "filter-frontend",
+      "name": "Filter - Frontend Only",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 1,
+      "position": [1380, 300]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "tableId": "job_posts",
+        "fieldsUi": {
+          "fieldValues": [
+            { "fieldId": "external_id", "fieldValue": "={{$json.external_id}}" },
+            { "fieldId": "title",       "fieldValue": "={{$json.title}}" },
+            { "fieldId": "company",     "fieldValue": "={{$json.company}}" },
+            { "fieldId": "apply_url",   "fieldValue": "={{$json.apply_url}}" },
+            { "fieldId": "description", "fieldValue": "={{$json.description}}" },
+            { "fieldId": "location",    "fieldValue": "={{$json.location}}" },
+            { "fieldId": "modality",    "fieldValue": "remote" },
+            { "fieldId": "posted_at",   "fieldValue": "={{$json.posted_at}}" }
+          ]
+        }
+      },
+      "id": "db-save",
+      "name": "DB - Insert Job",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1620, 450]
+    },
+    {
+      "parameters": {
+        "conditions": { "number": [{ "value1": "={{$json.match_score}}", "operation": "largerEqual", "value2": 55 }] }
+      },
+      "id": "filter-hot",
+      "name": "Filter - High Score Only",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 1,
+      "position": [1620, 150]
+    },
+    {
+      "parameters": {
+        "fromEmail": "Job Hunter <ramirotule@gmail.com>",
+        "toEmail": "={{$('Config - My Profile').first().json.myEmail}}",
+        "subject": "={{ '🎯 ' + $json.match_score + '% — ' + $json.title + ' @ ' + $json.company }}",
+        "html": "={{ '<div style=\"font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;border:1px solid #e5e7eb;border-radius:12px\">' + '<h2 style=\"color:#1d4ed8;margin:0 0 4px\">' + $json.title + '</h2>' + '<p style=\"color:#6b7280;margin:0 0 16px\">' + $json.company + ' · ' + $json.location + '</p>' + '<div style=\"background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 16px;margin-bottom:16px\">' + '<span style=\"font-size:24px;font-weight:bold;color:#15803d\">' + $json.match_score + '%</span><span style=\"color:#15803d;margin-left:8px\">match</span></div>' + '<p style=\"font-size:14px;color:#374151\"><strong>Por qué coincide:</strong> ' + ($json.reasons || []).join(' · ') + '</p>' + '<a href=\"' + $json.apply_url + '\" style=\"display:inline-block;background:#1d4ed8;color:white;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:bold;margin-top:16px\">Ver oferta →</a>' + '</div>' }}",
+        "options": {}
+      },
+      "id": "email-node",
+      "name": "Email - Send Alert",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1870, 150]
+    }
+  ],
+  "connections": {
+    "Schedule - Every 6 Hours": { "main": [[{ "node": "Config - My Profile",    "type": "main", "index": 0 }]] },
+    "Config - My Profile":      { "main": [[{ "node": "API - JSearch",           "type": "main", "index": 0 }]] },
+    "API - JSearch":            { "main": [[{ "node": "Code - Normalize",        "type": "main", "index": 0 }]] },
+    "Code - Normalize":         { "main": [[{ "node": "DB - Get Existing IDs",   "type": "main", "index": 0 }]] },
+    "DB - Get Existing IDs":    { "main": [[{ "node": "Filter - Deduplication",  "type": "main", "index": 0 }]] },
+    "Filter - Deduplication":   { "main": [[{ "node": "Code - Matching Engine",  "type": "main", "index": 0 }]] },
+    "Code - Matching Engine":   { "main": [[{ "node": "Filter - Frontend Only",  "type": "main", "index": 0 }]] },
+    "Filter - Frontend Only":   { "main": [[
+      { "node": "DB - Insert Job",          "type": "main", "index": 0 },
+      { "node": "Filter - High Score Only", "type": "main", "index": 0 }
+    ]] },
+    "Filter - High Score Only": { "main": [[{ "node": "Email - Send Alert",      "type": "main", "index": 0 }]] }
+  }
+}

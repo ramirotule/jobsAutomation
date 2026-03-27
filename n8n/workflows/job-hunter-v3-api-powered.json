@@ -1,0 +1,438 @@
+{
+  "name": "Job Hunter V3 — API Powered",
+  "nodes": [
+
+    {
+      "id": "trigger",
+      "name": "Schedule — Every 6 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [0, 500],
+      "parameters": {
+        "rule": { "interval": [{ "field": "hours", "hoursInterval": 6 }] }
+      }
+    },
+
+    {
+      "id": "config",
+      "name": "Config — Profile",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 500],
+      "parameters": {
+        "jsCode": "// Editá este bloque para actualizar tu perfil\nreturn [{\n  json: {\n    seniority: 'senior',\n    targetRoles: [\n      'Frontend Developer', 'Senior Frontend Developer',\n      'React Developer', 'Senior React Developer',\n      'React Native Developer', 'Full Stack Developer',\n      'JavaScript Developer', 'TypeScript Developer'\n    ],\n    primarySkills:   ['React', 'React.js', 'React Native', 'TypeScript', 'JavaScript', 'Next.js'],\n    secondarySkills: ['Redux', 'Redux Toolkit', 'GraphQL', 'Tailwind CSS', 'Firebase', 'Node.js', 'Material UI', 'MUI', 'Expo'],\n    preferredModality: 'remote',\n    location: 'Argentina',\n    languages: [\n      { lang: 'Spanish', level: 'native' },\n      { lang: 'English', level: 'B2' }\n    ],\n    minScoreThreshold: 60,\n    alertScoreThreshold: 75,\n  }\n}];"
+      }
+    },
+
+    {
+      "id": "fetch-jsearch",
+      "name": "HTTP — JSearch (React Developer)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [480, 100],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "method": "GET",
+        "url": "https://jsearch.p.rapidapi.com/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "query",            "value": "React Developer TypeScript remote" },
+            { "name": "num_pages",        "value": "3" },
+            { "name": "date_posted",      "value": "week" },
+            { "name": "employment_types", "value": "FULLTIME,CONTRACTOR" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-RapidAPI-Key",  "value": "={{ $env.JSEARCH_API_KEY }}" },
+            { "name": "X-RapidAPI-Host", "value": "jsearch.p.rapidapi.com" }
+          ]
+        },
+        "options": { "timeout": 20000 }
+      }
+    },
+
+    {
+      "id": "fetch-jsearch-rn",
+      "name": "HTTP — JSearch (React Native)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [480, 300],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "method": "GET",
+        "url": "https://jsearch.p.rapidapi.com/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "query",            "value": "React Native Developer remote" },
+            { "name": "num_pages",        "value": "2" },
+            { "name": "date_posted",      "value": "week" },
+            { "name": "employment_types", "value": "FULLTIME,CONTRACTOR" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-RapidAPI-Key",  "value": "={{ $env.JSEARCH_API_KEY }}" },
+            { "name": "X-RapidAPI-Host", "value": "jsearch.p.rapidapi.com" }
+          ]
+        },
+        "options": { "timeout": 20000 }
+      }
+    },
+
+    {
+      "id": "fetch-adzuna",
+      "name": "HTTP — Adzuna US",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [480, 500],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.adzuna.com/v1/api/jobs/us/search/1",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "app_id",           "value": "={{ $env.ADZUNA_APP_ID }}" },
+            { "name": "app_key",          "value": "={{ $env.ADZUNA_APP_KEY }}" },
+            { "name": "results_per_page", "value": "50" },
+            { "name": "what",             "value": "React Developer" },
+            { "name": "what_exclude",     "value": "junior intern internship" },
+            { "name": "sort_by",          "value": "date" },
+            { "name": "content-type",     "value": "application/json" }
+          ]
+        },
+        "options": { "timeout": 15000 }
+      }
+    },
+
+    {
+      "id": "fetch-remoteok",
+      "name": "HTTP — RemoteOK",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [480, 700],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "method": "GET",
+        "url": "https://remoteok.com/api?tags=react,typescript,frontend,react-native",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "User-Agent", "value": "JobHunterBot/3.0" }
+          ]
+        },
+        "options": { "timeout": 15000 }
+      }
+    },
+
+    {
+      "id": "fetch-remotive",
+      "name": "HTTP — Remotive",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [480, 900],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "method": "GET",
+        "url": "https://remotive.com/api/remote-jobs?category=software-dev&limit=50",
+        "options": { "timeout": 15000 }
+      }
+    },
+
+    {
+      "id": "fetch-jobicy",
+      "name": "HTTP — Jobicy",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [480, 1100],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "method": "GET",
+        "url": "https://jobicy.com/api/v2/remote-jobs?count=50&tag=javascript,react,frontend",
+        "options": { "timeout": 15000 }
+      }
+    },
+
+    {
+      "id": "norm-jsearch",
+      "name": "Code — Normalize JSearch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [760, 100],
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst jobs = data.data || [];\n\nfunction inferSeniority(text) {\n  const t = (text || '').toLowerCase();\n  if (/\\b(staff|principal)\\b/.test(t))     return 'staff';\n  if (/\\b(lead|tech lead)\\b/.test(t))      return 'lead';\n  if (/\\b(senior|sr\\.?)\\b/.test(t))        return 'senior';\n  if (/\\b(mid|middle|pleno)\\b/.test(t))    return 'mid';\n  if (/\\b(junior|jr\\.?|entry|associate)\\b/.test(t)) return 'junior';\n  return 'unknown';\n}\n\nreturn jobs.map(job => ({\n  json: {\n    source_slug:     'jsearch',\n    original_source: job.job_publisher || 'jsearch',\n    external_id:     'js_' + job.job_id,\n    title:           job.job_title || '',\n    company:         job.employer_name || '',\n    description:     (job.job_description || '').substring(0, 8000),\n    location:        [job.job_city, job.job_state, job.job_country].filter(Boolean).join(', ') || 'Remote',\n    modality:        job.job_is_remote ? 'remote' : 'on-site',\n    seniority:       inferSeniority((job.job_title || '') + ' ' + (job.job_description || '')),\n    required_skills: Array.isArray(job.job_required_skills) ? job.job_required_skills : [],\n    apply_url:       job.job_apply_link || '',\n    posted_at:       job.job_posted_at_datetime_utc || new Date().toISOString(),\n    salary_min:      job.job_min_salary || null,\n    salary_max:      job.job_max_salary || null,\n    salary_currency: job.job_salary_currency || 'USD',\n    salary_period:   (job.job_salary_period || 'YEAR').toLowerCase().replace('year', 'yearly'),\n  }\n}));"
+      }
+    },
+
+    {
+      "id": "norm-jsearch-rn",
+      "name": "Code — Normalize JSearch RN",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [760, 300],
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst jobs = data.data || [];\n\nfunction inferSeniority(text) {\n  const t = (text || '').toLowerCase();\n  if (/\\b(staff|principal)\\b/.test(t))     return 'staff';\n  if (/\\b(lead|tech lead)\\b/.test(t))      return 'lead';\n  if (/\\b(senior|sr\\.?)\\b/.test(t))        return 'senior';\n  if (/\\b(mid|middle|pleno)\\b/.test(t))    return 'mid';\n  if (/\\b(junior|jr\\.?|entry|associate)\\b/.test(t)) return 'junior';\n  return 'unknown';\n}\n\nreturn jobs.map(job => ({\n  json: {\n    source_slug:     'jsearch',\n    original_source: job.job_publisher || 'jsearch',\n    external_id:     'js_' + job.job_id,\n    title:           job.job_title || '',\n    company:         job.employer_name || '',\n    description:     (job.job_description || '').substring(0, 8000),\n    location:        [job.job_city, job.job_state, job.job_country].filter(Boolean).join(', ') || 'Remote',\n    modality:        job.job_is_remote ? 'remote' : 'on-site',\n    seniority:       inferSeniority((job.job_title || '') + ' ' + (job.job_description || '')),\n    required_skills: Array.isArray(job.job_required_skills) ? job.job_required_skills : [],\n    apply_url:       job.job_apply_link || '',\n    posted_at:       job.job_posted_at_datetime_utc || new Date().toISOString(),\n    salary_min:      job.job_min_salary || null,\n    salary_max:      job.job_max_salary || null,\n    salary_currency: job.job_salary_currency || 'USD',\n    salary_period:   (job.job_salary_period || 'YEAR').toLowerCase().replace('year', 'yearly'),\n  }\n}));"
+      }
+    },
+
+    {
+      "id": "norm-adzuna",
+      "name": "Code — Normalize Adzuna",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [760, 500],
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst jobs = data.results || [];\n\nconst SKILLS = ['react', 'react native', 'typescript', 'javascript', 'next.js', 'nextjs',\n  'graphql', 'node.js', 'redux', 'tailwind', 'css', 'html', 'expo', 'firebase',\n  'material ui', 'mui', 'angular', 'vue', 'python', 'java', 'php'];\n\nfunction inferSeniority(text) {\n  const t = (text || '').toLowerCase();\n  if (/\\b(staff|principal)\\b/.test(t))     return 'staff';\n  if (/\\b(lead|tech lead)\\b/.test(t))      return 'lead';\n  if (/\\b(senior|sr\\.?)\\b/.test(t))        return 'senior';\n  if (/\\b(mid|middle|pleno)\\b/.test(t))    return 'mid';\n  if (/\\b(junior|jr\\.?|entry|associate)\\b/.test(t)) return 'junior';\n  return 'unknown';\n}\n\nfunction inferModality(text) {\n  const t = (text || '').toLowerCase();\n  if (/\\bremote\\b/.test(t))    return 'remote';\n  if (/\\bhybrid\\b/.test(t))    return 'hybrid';\n  return 'on-site';\n}\n\nfunction extractSkills(text) {\n  const t = (text || '').toLowerCase();\n  return SKILLS.filter(s => t.includes(s));\n}\n\nreturn jobs.map(job => ({\n  json: {\n    source_slug:     'adzuna',\n    original_source: 'adzuna',\n    external_id:     'az_' + job.id,\n    title:           job.title || '',\n    company:         (job.company && job.company.display_name) || 'Unknown',\n    description:     (job.description || '').substring(0, 8000),\n    location:        (job.location && job.location.display_name) || '',\n    modality:        inferModality((job.title || '') + ' ' + (job.description || '')),\n    seniority:       inferSeniority(job.title || ''),\n    required_skills: extractSkills((job.description || '')),\n    apply_url:       job.redirect_url || '',\n    posted_at:       job.created || new Date().toISOString(),\n    salary_min:      job.salary_min || null,\n    salary_max:      job.salary_max || null,\n    salary_currency: 'USD',\n    salary_period:   'yearly',\n  }\n}));"
+      }
+    },
+
+    {
+      "id": "norm-remoteok",
+      "name": "Code — Normalize RemoteOK",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [760, 700],
+      "parameters": {
+        "jsCode": "const raw = $input.first().json;\nconst jobs = Array.isArray(raw) ? raw.slice(1) : [];\n\nfunction inferSeniority(text) {\n  const t = (text || '').toLowerCase();\n  if (/\\b(staff|principal)\\b/.test(t))     return 'staff';\n  if (/\\b(lead|tech lead)\\b/.test(t))      return 'lead';\n  if (/\\b(senior|sr\\.?)\\b/.test(t))        return 'senior';\n  if (/\\b(mid|middle|pleno)\\b/.test(t))    return 'mid';\n  if (/\\b(junior|jr\\.?|entry)\\b/.test(t)) return 'junior';\n  return 'unknown';\n}\n\nreturn jobs.map(job => ({\n  json: {\n    source_slug:     'remoteok',\n    original_source: 'remoteok',\n    external_id:     'rok_' + String(job.id),\n    title:           job.position || '',\n    company:         job.company  || '',\n    description:     (job.description || '').substring(0, 8000),\n    location:        'Remote',\n    modality:        'remote',\n    seniority:       inferSeniority((job.position || '') + ' ' + (job.description || '')),\n    required_skills: Array.isArray(job.tags) ? job.tags.map(t => t.trim()) : [],\n    apply_url:       job.url || ('https://remoteok.com/l/' + job.id),\n    posted_at:       job.date ? new Date(job.date).toISOString() : new Date().toISOString(),\n    salary_min:      job.salary_min ? parseInt(job.salary_min) : null,\n    salary_max:      job.salary_max ? parseInt(job.salary_max) : null,\n    salary_currency: 'USD',\n    salary_period:   'yearly',\n  }\n}));"
+      }
+    },
+
+    {
+      "id": "norm-remotive",
+      "name": "Code — Normalize Remotive",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [760, 900],
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst jobs = data.jobs || [];\n\nfunction inferSeniority(text) {\n  const t = (text || '').toLowerCase();\n  if (/\\b(staff|principal)\\b/.test(t))     return 'staff';\n  if (/\\b(lead|tech lead)\\b/.test(t))      return 'lead';\n  if (/\\b(senior|sr\\.?)\\b/.test(t))        return 'senior';\n  if (/\\b(mid|middle|pleno)\\b/.test(t))    return 'mid';\n  if (/\\b(junior|jr\\.?|entry)\\b/.test(t)) return 'junior';\n  return 'unknown';\n}\n\nreturn jobs.map(job => ({\n  json: {\n    source_slug:     'remotive',\n    original_source: 'remotive',\n    external_id:     'rem_' + String(job.id),\n    title:           job.title || '',\n    company:         job.company_name || '',\n    description:     (job.description || '').substring(0, 8000),\n    location:        job.candidate_required_location || 'Worldwide',\n    modality:        'remote',\n    seniority:       inferSeniority((job.title || '') + ' ' + (job.description || '')),\n    required_skills: Array.isArray(job.tags) ? job.tags : [],\n    apply_url:       job.url || '',\n    posted_at:       job.publication_date || new Date().toISOString(),\n    salary_min:      null,\n    salary_max:      null,\n    salary_currency: 'USD',\n    salary_period:   'yearly',\n  }\n}));"
+      }
+    },
+
+    {
+      "id": "norm-jobicy",
+      "name": "Code — Normalize Jobicy",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [760, 1100],
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst jobs = data.jobs || [];\n\nfunction inferSeniority(text) {\n  const t = (text || '').toLowerCase();\n  if (/\\b(staff|principal)\\b/.test(t))     return 'staff';\n  if (/\\b(lead|tech lead)\\b/.test(t))      return 'lead';\n  if (/\\b(senior|sr\\.?)\\b/.test(t))        return 'senior';\n  if (/\\b(mid|middle|pleno)\\b/.test(t))    return 'mid';\n  if (/\\b(junior|jr\\.?|entry)\\b/.test(t)) return 'junior';\n  return 'unknown';\n}\n\nreturn jobs.map(job => ({\n  json: {\n    source_slug:     'jobicy',\n    original_source: 'jobicy',\n    external_id:     'jy_' + String(job.id),\n    title:           job.jobTitle || '',\n    company:         job.companyName || '',\n    description:     (job.jobDescription || '').substring(0, 8000),\n    location:        job.jobRegion || 'Worldwide',\n    modality:        'remote',\n    seniority:       inferSeniority(job.jobTitle || ''),\n    required_skills: typeof job.jobSkills === 'string'\n                      ? job.jobSkills.split(',').map(s => s.trim()).filter(Boolean)\n                      : (Array.isArray(job.jobSkills) ? job.jobSkills : []),\n    apply_url:       job.url || '',\n    posted_at:       job.pubDate || new Date().toISOString(),\n    salary_min:      null,\n    salary_max:      null,\n    salary_currency: 'USD',\n    salary_period:   'yearly',\n  }\n}));"
+      }
+    },
+
+    {
+      "id": "merge-all",
+      "name": "Merge — All Sources",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1060, 600],
+      "parameters": { "mode": "append" }
+    },
+
+    {
+      "id": "batch-dedup",
+      "name": "Code — Batch Dedup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1300, 600],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// 1. Dedup en memoria por external_id\nconst allJobs = $input.all();\nconst seen = new Map();\nfor (const item of allJobs) {\n  const id = item.json.external_id;\n  if (id && !seen.has(id)) seen.set(id, item);\n}\nconst unique = [...seen.values()];\n\nif (unique.length === 0) return [];\nconsole.log(`Items únicos tras dedup en memoria: ${unique.length}`);\n\n// 2. Una sola query a Supabase para traer los IDs que ya existen\nconst ids = unique.map(i => String(i.json.external_id));\nconst idParam = ids.join(',');\nconst supabaseUrl = $env.SUPABASE_URL;\nconst supabaseKey = $env.SUPABASE_KEY;\n\nlet existingSet = new Set();\ntry {\n  const existing = await $helpers.httpRequest({\n    method: 'GET',\n    url: `${supabaseUrl}/rest/v1/job_posts?select=external_id&external_id=in.(${idParam})&limit=2000`,\n    headers: {\n      apikey: supabaseKey,\n      Authorization: `Bearer ${supabaseKey}`,\n    },\n  });\n  existingSet = new Set((existing || []).map(e => e.external_id));\n  console.log(`IDs ya en DB: ${existingSet.size}`);\n} catch (e) {\n  console.error('Dedup query falló, procediendo con todos:', e.message);\n}\n\n// 3. Devolver solo los nuevos\nconst newJobs = unique.filter(item => !existingSet.has(item.json.external_id));\nconsole.log(`Vacantes nuevas a insertar: ${newJobs.length}`);\nreturn newJobs;"
+      }
+    },
+
+    {
+      "id": "batch-insert",
+      "name": "Code — Batch Insert Supabase",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 600],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const newJobs = $input.all();\nif (newJobs.length === 0) {\n  console.log('No hay vacantes nuevas para insertar');\n  return [];\n}\n\nconst supabaseUrl = $env.SUPABASE_URL;\nconst supabaseKey = $env.SUPABASE_KEY;\n\n// Guardar mapa external_id → datos originales para el matching\nconst originalMap = new Map(newJobs.map(item => [item.json.external_id, item.json]));\n\nconst rows = newJobs.map(item => {\n  const j = item.json;\n  return {\n    source_slug:     j.source_slug,\n    original_source: j.original_source || j.source_slug,\n    external_id:     j.external_id,\n    title:           j.title,\n    company:         j.company,\n    description:     (j.description || '').substring(0, 10000),\n    location:        j.location || 'Unknown',\n    modality:        j.modality || 'unknown',\n    seniority:       j.seniority || 'unknown',\n    required_skills: Array.isArray(j.required_skills) ? j.required_skills : [],\n    apply_url:       j.apply_url,\n    posted_at:       j.posted_at,\n    salary_min:      j.salary_min || null,\n    salary_max:      j.salary_max || null,\n    salary_currency: j.salary_currency || 'USD',\n    salary_period:   j.salary_period || 'yearly',\n  };\n});\n\nlet inserted = [];\ntry {\n  inserted = await $helpers.httpRequest({\n    method: 'POST',\n    url: `${supabaseUrl}/rest/v1/job_posts`,\n    headers: {\n      apikey: supabaseKey,\n      Authorization: `Bearer ${supabaseKey}`,\n      'Content-Type': 'application/json',\n      Prefer: 'return=representation,resolution=ignore-duplicates',\n    },\n    body: rows,\n  });\n  console.log(`Insertados: ${Array.isArray(inserted) ? inserted.length : 0}`);\n} catch (e) {\n  console.error('Batch insert error:', e.message);\n  return [];\n}\n\n// Combinar datos de Supabase (id, created_at) con datos originales (description, skills) para el matching\nreturn (Array.isArray(inserted) ? inserted : []).map(dbRow => ({\n  json: {\n    ...originalMap.get(dbRow.external_id),\n    id:         dbRow.id,\n    created_at: dbRow.created_at,\n  }\n}));"
+      }
+    },
+
+    {
+      "id": "matching",
+      "name": "Code — Matching Engine",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 600],
+      "parameters": {
+        "jsCode": "const PROFILE = $('Config — Profile').first().json;\nconst job     = $input.first().json;\n\n// ─── Helpers ─────────────────────────────────────────────────────────────────\n\nfunction normalize(s) { return (s || '').toLowerCase().trim().replace(/[^a-z0-9 .]/g, ''); }\n\nfunction skillMatch(a, b) {\n  const na = normalize(a), nb = normalize(b);\n  return na === nb || na.includes(nb) || nb.includes(na);\n}\n\nconst LEVELS = { junior: 1, mid: 2, senior: 3, lead: 4, staff: 5, unknown: 0 };\n\n// ─── Título (0-20) ────────────────────────────────────────────────────────────\nfunction scoreTitle(title, roles) {\n  const t = title.toLowerCase();\n  for (const r of roles) {\n    const rl = r.toLowerCase();\n    if (t === rl || t.includes(rl) || rl.includes(t)) return 20;\n  }\n  const words = new Set(t.split(/\\s+/));\n  const best = roles.reduce((b, r) => {\n    const rw = r.toLowerCase().split(/\\s+/);\n    const overlap = rw.filter(w => words.has(w) && w.length > 2).length;\n    return Math.max(b, overlap / rw.length);\n  }, 0);\n  if (best >= 0.5) return 12;\n  if (best > 0)    return 5;\n  return 0;\n}\n\n// ─── Skills (0-35) ────────────────────────────────────────────────────────────\nfunction scoreSkills(required, primary, secondary) {\n  const allProfile = [...primary, ...secondary];\n  if (!required || required.length === 0) {\n    // Sin skills declarados: intentar extraer de descripción\n    const desc = (job.description || '').toLowerCase();\n    const detected = primary.filter(p => desc.includes(p.toLowerCase()));\n    const ratio = detected.length / primary.length;\n    return { score: Math.round(25 * ratio), matched: detected, missing: [] };\n  }\n  const matched = required.filter(r => allProfile.some(p => skillMatch(r, p)));\n  const missing = required.filter(r => !allProfile.some(p => skillMatch(r, p)));\n  const ratio   = matched.length / required.length;\n  const bonus   = matched.some(m => primary.some(p => skillMatch(m, p))) ? 5 : 0;\n  return { score: Math.min(Math.round(30 * ratio) + bonus, 35), matched, missing };\n}\n\n// ─── Seniority (0-15) ────────────────────────────────────────────────────────\nfunction scoreSeniority(jobSen, profSen) {\n  if (jobSen === 'unknown') return 8;\n  const diff = Math.abs((LEVELS[jobSen] || 0) - (LEVELS[profSen] || 0));\n  if (diff === 0) return 15;\n  if (diff === 1) return 9;\n  if (diff === 2) return 3;\n  return 0;\n}\n\n// ─── Modalidad (0-15) ────────────────────────────────────────────────────────\nfunction scoreModality(jobMod) {\n  if (jobMod === 'remote') return 15;\n  if (jobMod === 'hybrid') return 8;\n  return 0;\n}\n\n// ─── Ubicación (0-10) ────────────────────────────────────────────────────────\nfunction scoreLocation(loc, mod) {\n  if (mod === 'remote') return 10;\n  const l = (loc || '').toLowerCase();\n  if (l.includes('argentina')) return 10;\n  if (l.includes('latam') || l.includes('latin america')) return 7;\n  if (l.includes('worldwide') || l.includes('global')) return 8;\n  return 0;\n}\n\n// ─── Idioma (0-5) ────────────────────────────────────────────────────────────\nfunction scoreLanguage(desc, languages) {\n  const d = (desc || '').toLowerCase();\n  if (!/english|inglés/.test(d)) return 5;\n  const en = languages.find(l => l.lang.toLowerCase() === 'english');\n  if (!en) return 0;\n  const lvl = { B2: 3, C1: 4, C2: 5, native: 6, B1: 2, A2: 1, A1: 0 }[en.level] || 0;\n  return lvl >= 3 ? 5 : (lvl === 2 ? 3 : 0);\n}\n\n// ─── Calcular ────────────────────────────────────────────────────────────────\nconst titleScore    = scoreTitle(job.title, PROFILE.targetRoles);\nconst skillsResult  = scoreSkills(job.required_skills, PROFILE.primarySkills, PROFILE.secondarySkills);\nconst seniorityScore = scoreSeniority(job.seniority, PROFILE.seniority);\nconst modalityScore = scoreModality(job.modality);\nconst locationScore = scoreLocation(job.location, job.modality);\nconst languageScore = scoreLanguage(job.description, PROFILE.languages);\n\nconst total = titleScore + skillsResult.score + seniorityScore + modalityScore + locationScore + languageScore;\n\nconst reasons = [];\nif (titleScore >= 12)          reasons.push('Título coincide con tu perfil');\nif (skillsResult.matched.length > 0) reasons.push(`Skills: ${skillsResult.matched.slice(0, 4).join(', ')}`);\nif (seniorityScore >= 12)      reasons.push(`Seniority exacto (${job.seniority})`);\nif (modalityScore === 15)      reasons.push('Modalidad 100% remota');\nif (locationScore >= 7)        reasons.push('Ubicación / región compatible');\nif (languageScore === 5)       reasons.push('Inglés B2+ aceptado');\n\nconst flags = [];\nif (!job.salary_min && !job.salary_max) flags.push('Salario no especificado');\nif (job.seniority === 'unknown')        flags.push('Seniority no claro en la oferta');\nif (skillsResult.missing.length > 2)   flags.push(`Skills que no tenés: ${skillsResult.missing.slice(0, 3).join(', ')}`);\n\nreturn [{\n  json: {\n    ...job,\n    match: {\n      score:           total,\n      breakdown: {\n        title:     titleScore,\n        skills:    skillsResult.score,\n        seniority: seniorityScore,\n        modality:  modalityScore,\n        location:  locationScore,\n        language:  languageScore,\n      },\n      matched_skills:  skillsResult.matched,\n      missing_skills:  skillsResult.missing,\n      match_reasons:   reasons,\n      flags,\n      above_threshold: total >= PROFILE.minScoreThreshold,\n      above_alert:     total >= PROFILE.alertScoreThreshold,\n    }\n  }\n}];"
+      }
+    },
+
+    {
+      "id": "filter-60",
+      "name": "Filter — Score >= 60",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [2020, 600],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "leftValue":  "={{ $json.match.above_threshold }}",
+              "rightValue": true,
+              "operator":   { "type": "boolean", "operation": "true" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+
+    {
+      "id": "insert-match",
+      "name": "Supabase — Insert Job Match",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [2260, 600],
+      "parameters": {
+        "operation": "create",
+        "tableId": "job_matches",
+        "fieldsUi": {
+          "fieldValues": [
+            { "fieldId": "job_post_id",     "fieldValue": "={{ $json.id }}" },
+            { "fieldId": "score",           "fieldValue": "={{ $json.match.score }}" },
+            { "fieldId": "score_breakdown", "fieldValue": "={{ JSON.stringify($json.match.breakdown) }}" },
+            { "fieldId": "match_reasons",   "fieldValue": "={{ $json.match.match_reasons }}" },
+            { "fieldId": "matched_skills",  "fieldValue": "={{ $json.match.matched_skills }}" },
+            { "fieldId": "missing_skills",  "fieldValue": "={{ $json.match.missing_skills }}" },
+            { "fieldId": "flags",           "fieldValue": "={{ $json.match.flags }}" },
+            { "fieldId": "status",          "fieldValue": "pending" },
+            { "fieldId": "is_notified",     "fieldValue": false }
+          ]
+        }
+      }
+    },
+
+    {
+      "id": "filter-75",
+      "name": "Filter — Score >= 75 (alerta)",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [2500, 600],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "leftValue":  "={{ $('matching').item.json.match.above_alert }}",
+              "rightValue": true,
+              "operator":   { "type": "boolean", "operation": "true" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+
+    {
+      "id": "telegram-alert",
+      "name": "Telegram — Match Alert",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [2740, 400],
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "={{ '🎯 *Match ' + $('matching').item.json.match.score + '/100*\\n\\n' + '💼 *' + $('matching').item.json.title + '*\\n' + '🏢 ' + $('matching').item.json.company + '\\n' + '🌐 ' + $('matching').item.json.modality + ' · ' + $('matching').item.json.location + '\\n' + '📡 via ' + ($('matching').item.json.original_source || $('matching').item.json.source_slug) + '\\n' + ($('matching').item.json.salary_min ? '💰 $' + $('matching').item.json.salary_min + ' – $' + $('matching').item.json.salary_max + ' ' + $('matching').item.json.salary_currency + '\\n' : '') + '\\n✅ ' + $('matching').item.json.match.match_reasons.join('\\n✅ ') + '\\n\\n🔗 ' + $('matching').item.json.apply_url }}",
+        "additionalFields": { "parse_mode": "Markdown" }
+      }
+    },
+
+    {
+      "id": "log-activity",
+      "name": "Supabase — Log Activity",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [2740, 800],
+      "parameters": {
+        "operation": "create",
+        "tableId": "activity_logs",
+        "fieldsUi": {
+          "fieldValues": [
+            { "fieldId": "action",      "fieldValue": "job_matched" },
+            { "fieldId": "entity_type", "fieldValue": "job_match" },
+            { "fieldId": "entity_id",   "fieldValue": "={{ $json.id }}" },
+            { "fieldId": "metadata",    "fieldValue": "={{ JSON.stringify({ score: $('matching').item.json.match.score, title: $('matching').item.json.title, company: $('matching').item.json.company, source: $('matching').item.json.source_slug, original_source: $('matching').item.json.original_source }) }}" }
+          ]
+        }
+      }
+    }
+
+  ],
+
+  "connections": {
+    "Schedule — Every 6 Hours": {
+      "main": [[{ "node": "Config — Profile", "type": "main", "index": 0 }]]
+    },
+    "Config — Profile": {
+      "main": [[
+        { "node": "HTTP — JSearch (React Developer)", "type": "main", "index": 0 },
+        { "node": "HTTP — JSearch (React Native)",    "type": "main", "index": 0 },
+        { "node": "HTTP — Adzuna US",                "type": "main", "index": 0 },
+        { "node": "HTTP — RemoteOK",                 "type": "main", "index": 0 },
+        { "node": "HTTP — Remotive",                 "type": "main", "index": 0 },
+        { "node": "HTTP — Jobicy",                   "type": "main", "index": 0 }
+      ]]
+    },
+    "HTTP — JSearch (React Developer)": { "main": [[{ "node": "Code — Normalize JSearch",    "type": "main", "index": 0 }]] },
+    "HTTP — JSearch (React Native)":    { "main": [[{ "node": "Code — Normalize JSearch RN", "type": "main", "index": 0 }]] },
+    "HTTP — Adzuna US":                 { "main": [[{ "node": "Code — Normalize Adzuna",     "type": "main", "index": 0 }]] },
+    "HTTP — RemoteOK":                  { "main": [[{ "node": "Code — Normalize RemoteOK",   "type": "main", "index": 0 }]] },
+    "HTTP — Remotive":                  { "main": [[{ "node": "Code — Normalize Remotive",   "type": "main", "index": 0 }]] },
+    "HTTP — Jobicy":                    { "main": [[{ "node": "Code — Normalize Jobicy",     "type": "main", "index": 0 }]] },
+    "Code — Normalize JSearch":    { "main": [[{ "node": "Merge — All Sources", "type": "main", "index": 0 }]] },
+    "Code — Normalize JSearch RN": { "main": [[{ "node": "Merge — All Sources", "type": "main", "index": 1 }]] },
+    "Code — Normalize Adzuna":     { "main": [[{ "node": "Merge — All Sources", "type": "main", "index": 2 }]] },
+    "Code — Normalize RemoteOK":   { "main": [[{ "node": "Merge — All Sources", "type": "main", "index": 3 }]] },
+    "Code — Normalize Remotive":   { "main": [[{ "node": "Merge — All Sources", "type": "main", "index": 4 }]] },
+    "Code — Normalize Jobicy":     { "main": [[{ "node": "Merge — All Sources", "type": "main", "index": 5 }]] },
+    "Merge — All Sources":           { "main": [[{ "node": "Code — Batch Dedup",          "type": "main", "index": 0 }]] },
+    "Code — Batch Dedup":            { "main": [[{ "node": "Code — Batch Insert Supabase", "type": "main", "index": 0 }]] },
+    "Code — Batch Insert Supabase":  { "main": [[{ "node": "Code — Matching Engine",       "type": "main", "index": 0 }]] },
+    "Code — Matching Engine":        { "main": [[{ "node": "Filter — Score >= 60",          "type": "main", "index": 0 }]] },
+    "Filter — Score >= 60":          { "main": [[{ "node": "Supabase — Insert Job Match",   "type": "main", "index": 0 }]] },
+    "Supabase — Insert Job Match": {
+      "main": [[
+        { "node": "Filter — Score >= 75 (alerta)", "type": "main", "index": 0 },
+        { "node": "Supabase — Log Activity",        "type": "main", "index": 0 }
+      ]]
+    },
+    "Filter — Score >= 75 (alerta)": { "main": [[{ "node": "Telegram — Match Alert", "type": "main", "index": 0 }]] }
+  },
+
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+
+  "meta": {
+    "description": "Job Hunter V3. Fuentes: JSearch (LinkedIn+Indeed+Glassdoor), Adzuna, RemoteOK, Remotive, Jobicy. Dedup en batch → Insert en batch → Matching → Telegram.",
+    "version": "3.0.0",
+    "envVarsRequired": [
+      "JSEARCH_API_KEY   → RapidAPI key para JSearch (rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch)",
+      "ADZUNA_APP_ID     → App ID de Adzuna (developer.adzuna.com)",
+      "ADZUNA_APP_KEY    → App Key de Adzuna",
+      "SUPABASE_URL      → URL del proyecto Supabase (ej: https://xxx.supabase.co)",
+      "SUPABASE_KEY      → Service Role Key de Supabase",
+      "TELEGRAM_CHAT_ID  → Chat ID de Telegram para alertas"
+    ],
+    "rateLimit": {
+      "jsearch":  "2 queries x 4 runs/day = 8/day = ~240/mes (free tier: 200/mes — upgradear a $10/mes para holgura)",
+      "adzuna":   "1 query x 4 runs/day = 4/day — free tier: 250/day, sin problema",
+      "remoteok": "sin límite documentado, throttle natural de 6 horas",
+      "remotive": "sin límite documentado",
+      "jobicy":   "sin autenticación, sin límite documentado"
+    }
+  }
+}
