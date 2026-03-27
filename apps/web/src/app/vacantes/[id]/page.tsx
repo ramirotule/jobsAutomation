@@ -2,8 +2,9 @@ import { getJobById } from '@/lib/supabase'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
-export default async function JobDetailPage({ params }: { params: { id: string } }) {
-  const job = await getJobById(params.id)
+export default async function JobDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const job = await getJobById(id)
   if (!job) notFound()
 
   const posted = (job.postedAt || job.createdAt)
