@@ -75,9 +75,13 @@ function mapRow(row: Record<string, unknown>): StoredApplication {
 }
 
 export async function getApplications(): Promise<StoredApplication[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
   const { data } = await supabase
     .from('applications')
     .select('*')
+    .eq('user_id', user.id)
     .order('applied_at', { ascending: false })
   return (data ?? []).map(mapRow)
 }
@@ -92,9 +96,13 @@ export async function getApplication(id: string): Promise<StoredApplication | nu
 }
 
 export async function saveApplication(app: Omit<StoredApplication, 'id' | 'updatedAt'>): Promise<StoredApplication | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Debes iniciar sesión para guardar una postulación.");
+
   const { data } = await supabase
     .from('applications')
     .insert({
+      user_id:            user.id,
       job_id:             app.jobId,
       title:              app.title,
       company:            app.company,

@@ -1,14 +1,13 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient as createCoreClient } from '@supabase/supabase-js'
+import { createClient } from '@/utils/supabase/client'
 import type { JobMatch, JobPost, SearchProfile, Application, Alert, JobFilters } from '@/types'
 
-const supabaseUrl     = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// Usar el cliente unificado que maneja cookies/sesión correctamente
+export const supabase = createClient()
 
 // Supabase client con service role para uso server-side (n8n / cron)
 export function createServiceClient() {
-  return createClient(
+  return createCoreClient(
     process.env.SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   )
@@ -48,11 +47,16 @@ export async function getJobPosts(
   filters: JobFilters = {},
   page = 0,
   pageSize = 25,
+  client = supabase
 ): Promise<{ data: JobPost[]; total: number }> {
+  const { data: { user } } = await client.auth.getUser();
+  if (!user) return { data: [], total: 0 };
+
   // Use the view that excludes applied jobs by default as per user request
-  let query = supabase
+  let query = client
     .from('v_available_vacancies')
     .select('*', { count: 'exact' })
+    .eq('user_id', user.id)
     .order('posted_at', { ascending: false, nullsFirst: false })
     .range(page * pageSize, (page + 1) * pageSize - 1)
 
@@ -215,13 +219,16 @@ export async function getApplications(userId: string): Promise<Application[]> {
 // ============================================================
 // Stats para el dashboard (desde job_posts)
 // ============================================================
-export async function getDashboardStats() {
+export async function getDashboardStats(client = supabase) {
+  const { data: { user } } = await client.auth.getUser();
+  if (!user) return null;
+
   const today   = new Date().toISOString().split('T')[0]
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
 
   const [{ data: posts }, { data: apps }] = await Promise.all([
-    supabase.from('job_posts').select('id, posted_at, created_at'),
-    supabase.from('applications').select('id, status'),
+    client.from('job_posts').select('id, posted_at, created_at').eq('user_id', user.id),
+    client.from('applications').select('id, status').eq('user_id', user.id),
   ])
 
   const allPosts = posts ?? []
@@ -240,4 +247,42 @@ export async function getDashboardStats() {
     rejected:   statusCount('rejected'),
     ghosted:    statusCount('ghosted'),
   }
+}
+
+/**
+ * Función para registrar un usuario nuevo (Sign Up)
+ */
+export async function signUpUser(
+  email: string, 
+  password: string, 
+  metadata?: {
+    first_name?: string;
+    last_name?: string;
+    target_area?: string;
+    target_roles?: string[];
+  }
+) {
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: metadata
+    }
+  })
+
+  if (error) throw error
+  return data
+}
+
+/**
+ * Función para iniciar sesión (Sign In con Password)
+ */
+export async function signInUser(email: string, password: string) {
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  })
+
+  if (error) throw error
+  return data
 }

@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
+import { createClient } from "@/utils/supabase/server";
+import { cookies } from "next/headers";
+import LogoutButton from "@/components/auth/LogoutButton";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -15,20 +18,39 @@ const NAV_LINKS = [
   { href: "/", label: "Dashboard", icon: "📊" },
   { href: "/vacantes", label: "Vacantes", icon: "🎯" },
   { href: "/postulaciones", label: "Postulaciones", icon: "🚀" },
-  // { href: '/intereses',      label: 'Intereses',     icon: '🧠' },
   { href: "/configuracion", label: "Alertas", icon: "🔔" },
   { href: "/perfil", label: "Perfil", icon: "🧑‍💻" },
 ];
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const cookieStore = await cookies();
+  const supabase = createClient(cookieStore);
+  
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // Si no hay usuario, renderizamos solo el children (que será la página de login)
+  if (!user) {
+    return (
+      <html lang="es">
+        <body className={`${inter.className} bg-gray-50 text-gray-900`}>
+          <main className="min-h-screen">{children}</main>
+        </body>
+      </html>
+    );
+  }
+
+  const firstName = user.user_metadata?.first_name || "Usuario";
+  const lastName = user.user_metadata?.last_name || "";
+
   return (
     <html lang="es">
       <body className={`${inter.className} bg-gray-50 text-gray-900`}>
-        {/* Sidebar / Navbar */}
         <div className="flex min-h-screen">
           <aside className="w-56 bg-gray-100 border-r border-gray-200 fixed inset-y-0 left-0 flex flex-col">
             <div className="px-6 py-5 border-b border-gray-200">
@@ -39,6 +61,13 @@ export default function RootLayout({
                 v1.0 · MVP
               </span>
             </div>
+            
+            {/* Bienvenida */}
+            <div className="px-6 py-4 border-b border-gray-200 bg-white/50">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Bienvenido/a</p>
+              <p className="font-bold text-sm text-indigo-600 truncate">{firstName} {lastName}</p>
+            </div>
+
             <nav className="flex-1 px-3 py-4 space-y-1">
               {NAV_LINKS.map((link) => (
                 <Link
@@ -51,13 +80,17 @@ export default function RootLayout({
                 </Link>
               ))}
             </nav>
-            <div className="px-4 py-4 border-t border-gray-200">
-              <p className="text-xs text-gray-400">Ramiro Toulemonde</p>
-              <p className="text-xs text-gray-400">Senior Frontend Dev</p>
+            
+            <div className="px-3 py-4 border-t border-gray-200 space-y-4">
+              <LogoutButton />
+              
+              <div className="px-3">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Desarrollado por</p>
+                <p className="text-xs text-gray-500 font-medium">Ramiro Toulemonde</p>
+              </div>
             </div>
           </aside>
 
-          {/* Main content */}
           <main className="flex-1 ml-56 min-h-screen">{children}</main>
         </div>
       </body>

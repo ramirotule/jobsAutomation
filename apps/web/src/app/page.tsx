@@ -1,13 +1,18 @@
 import { getDashboardStats, getJobPosts } from '@/lib/supabase'
+import { createClient } from '@/utils/supabase/server'
+import { cookies } from 'next/headers'
 import Link from 'next/link'
 
 // Force re-render on every request so stats always reflect latest DB data
 export const dynamic = 'force-dynamic'
 
 export default async function DashboardPage() {
+  const cookieStore = await cookies()
+  const supabaseServer = createClient(cookieStore)
+  
   const [stats, todayJobs] = await Promise.all([
-    getDashboardStats().catch(() => null),
-    getJobPosts({ search: undefined }, 0, 5).catch(() => ({ data: [], total: 0 })),
+    getDashboardStats(supabaseServer).catch(() => null),
+    getJobPosts({ search: undefined }, 0, 5, supabaseServer).catch(() => ({ data: [], total: 0 })),
   ])
 
   const today    = new Date().toISOString().split('T')[0]
@@ -19,8 +24,8 @@ export default async function DashboardPage() {
 
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Job Hunter</h1>
-          <p className="text-gray-500 mt-1">Automatizador de búsqueda de empleo · Ramiro Toulemonde</p>
+          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-gray-500 mt-1">Gestión centralizada de tu búsqueda de empleo</p>
         </div>
 
         {/* Vacantes stats */}
