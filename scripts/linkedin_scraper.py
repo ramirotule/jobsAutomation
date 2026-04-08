@@ -5,10 +5,12 @@ from jobspy import scrape_jobs
 
 def main():
     try:
+        # site = sys.argv[1] if len(sys.argv) > 1 else "linkedin"
+        
         # Scrapear empleos usando la librería real JobSpy
         jobs = scrape_jobs(
-            site_name=["linkedin", "indeed", "glassdoor"], 
-            search_term="React Developer", 
+            site_name=["linkedin"], 
+            search_term="React Native", 
             location="Argentina", 
             is_remote=True,
             results_wanted=15, 

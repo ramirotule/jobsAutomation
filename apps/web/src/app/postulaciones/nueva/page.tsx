@@ -18,19 +18,36 @@ const STATUS_ORDER: AppStatus[] = [
   "ghosted",
 ];
 
+const formatAmount = (val: string) => {
+  if (!val) return "";
+  const numeric = val.replace(/\D/g, "");
+  return new Intl.NumberFormat("es-AR").format(Number(numeric));
+};
+
+const parseAmount = (val: string) => {
+  return val.replace(/\D/g, "");
+};
+
+const getLocalDatetime = () => {
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  return now.toISOString().slice(0, 16);
+};
+
 export default function NuevaPostulacionPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    title: "",
+    title: "Frontend Developer",
     company: "",
     location: "",
     applyUrl: "",
-    appliedAt: new Date().toISOString().split("T")[0], // Default to today
+    appliedAt: getLocalDatetime(), // Local datetime
     status: "applied" as AppStatus,
     salaryExpectation: "",
     currency: "USD",
     recruiterName: "",
+    recruiterLinkedin: "",
     contactType: "self_initiated" as "self_initiated" | "recruiter_initiated",
     notes: "",
   });
@@ -43,7 +60,7 @@ export default function NuevaPostulacionPage() {
       await saveApplication({
         ...formData,
         salaryExpectation: formData.salaryExpectation
-          ? parseInt(formData.salaryExpectation)
+          ? parseInt(parseAmount(formData.salaryExpectation))
           : undefined,
         appliedAt: new Date(formData.appliedAt).toISOString(),
       });
@@ -163,10 +180,10 @@ export default function NuevaPostulacionPage() {
                 htmlFor="appliedAt"
                 className="text-sm font-medium text-gray-700"
               >
-                Fecha de postulación
+                Fecha y hora de postulación
               </label>
               <input
-                type="date"
+                type="datetime-local"
                 id="appliedAt"
                 name="appliedAt"
                 required
@@ -218,6 +235,24 @@ export default function NuevaPostulacionPage() {
 
             <div className="space-y-2">
               <label
+                htmlFor="recruiterLinkedin"
+                className="text-sm font-medium text-gray-700"
+              >
+                LinkedIn del Recruiter
+              </label>
+              <input
+                type="url"
+                id="recruiterLinkedin"
+                name="recruiterLinkedin"
+                value={formData.recruiterLinkedin}
+                onChange={handleChange}
+                placeholder="https://linkedin.com/in/..."
+                className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label
                 htmlFor="contactType"
                 className="text-sm font-medium text-gray-700"
               >
@@ -247,15 +282,25 @@ export default function NuevaPostulacionPage() {
               <div className="relative shadow-sm rounded-lg overflow-hidden">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none bg-gray-50 border-r border-gray-200 px-2.5">
                   <span className="text-gray-500 text-[10px] font-bold">
-                    {formData.currency === "ARS" ? "$AR" : formData.currency === "USD" ? "U$S" : "€"}
+                    {formData.currency === "ARS"
+                      ? "$AR"
+                      : formData.currency === "USD"
+                        ? "U$S"
+                        : "€"}
                   </span>
                 </div>
                 <input
-                  type="number"
+                  type="text"
                   id="salaryExpectation"
                   name="salaryExpectation"
+                  inputMode="numeric"
                   value={formData.salaryExpectation}
-                  onChange={handleChange}
+                  onChange={(e) => {
+                    setFormData((prev) => ({
+                      ...prev,
+                      salaryExpectation: formatAmount(e.target.value),
+                    }));
+                  }}
                   placeholder="0"
                   className="w-full pl-16 pr-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                 />

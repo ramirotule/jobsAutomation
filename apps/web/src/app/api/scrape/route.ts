@@ -6,13 +6,16 @@ import { supabase } from '@/lib/supabase'
 
 const execAsync = promisify(exec)
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
+    const body = await request.json().catch(() => ({}));
+    const site = body.site || 'linkedin';
+
     // 1. Ejecutar el script desde node.js
     // process.cwd() en Next.js apunta a la raíz de Next (en tu caso 'apps/web'). 
     // Por eso subimos 2 niveles para llegar a 'scripts'
     const scriptPath = path.resolve(process.cwd(), '../../scripts/linkedin_scraper.py')
-    const { stdout, stderr } = await execAsync(`python3 "${scriptPath}"`)
+    const { stdout, stderr } = await execAsync(`python3 "${scriptPath}" "${site}"`)
     
     // 2. Leer la respuesta JSON que imprimió Python
     // Buscamos sacar cualquier warning innecesario de python que arruine el parse

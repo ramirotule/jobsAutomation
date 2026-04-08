@@ -41,11 +41,11 @@ export default function PerfilPage() {
   const [savedProfile, setSavedProfile] = useState(false);
   const [savedCv, setSavedCv] = useState(false);
   const [activeTab, setActiveTab] = useState<"perfil" | "cv" | "kit">("perfil");
-  const [coverLang, setCoverLang] = useState<"es" | "en">("es");
+  const [coverLang, setCoverLang] = useState<"es" | "en">("en");
   const [coverES, setCoverES] = useState("");
   const [coverEN, setCoverEN] = useState("");
-  
-  const [dmLang, setDMLang] = useState<"es" | "en">("es");
+
+  const [dmLang, setDMLang] = useState<"es" | "en">("en");
   const [dmES, setDmES] = useState("");
   const [dmEN, setDmEN] = useState("");
 
@@ -84,28 +84,35 @@ export default function PerfilPage() {
 
   function copyCoverAsHTML(text: string, key: string) {
     const html = text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .split('\n')
-      .map(line => {
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .split("\n")
+      .map((line) => {
         // Convert URLs to hyperlinks
         const linked = line.replace(
           /(https?:\/\/[^\s]+)/g,
           '<a href="$1">$1</a>',
-        )
-        return linked
+        );
+        return linked;
       })
-      .join('<br>\n')
+      .join("<br>\n");
 
-    const htmlBlob  = new Blob([`<div style="font-family:sans-serif;font-size:14px;line-height:1.7">${html}</div>`], { type: 'text/html' })
-    const plainBlob = new Blob([text], { type: 'text/plain' })
+    const htmlBlob = new Blob(
+      [
+        `<div style="font-family:sans-serif;font-size:14px;line-height:1.7">${html}</div>`,
+      ],
+      { type: "text/html" },
+    );
+    const plainBlob = new Blob([text], { type: "text/plain" });
 
     navigator.clipboard
-      .write([new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': plainBlob })])
-      .catch(() => navigator.clipboard.writeText(text)) // fallback
-    setCopied(key)
-    setTimeout(() => setCopied(null), 2000)
+      .write([
+        new ClipboardItem({ "text/html": htmlBlob, "text/plain": plainBlob }),
+      ])
+      .catch(() => navigator.clipboard.writeText(text)); // fallback
+    setCopied(key);
+    setTimeout(() => setCopied(null), 2000);
   }
 
   useEffect(() => {
@@ -235,9 +242,9 @@ export default function PerfilPage() {
         {/* Tabs */}
         <div className="flex gap-2 mb-6">
           {[
-            { key: "perfil", label: "Criterios de búsqueda" },
-            { key: "cv", label: "Mi CV" },
             { key: "kit", label: "Kit de postulación" },
+            { key: "cv", label: "Mi CV" },
+            { key: "perfil", label: "Criterios de búsqueda" },
           ].map((tab) => (
             <button
               key={tab.key}
@@ -450,59 +457,55 @@ export default function PerfilPage() {
                     </div>
                     <button
                       onClick={() => copyToClipboard(link.url, link.key)}
-                      className="shrink-0 text-xs border border-gray-200 bg-white px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
+                      className="shrink-0 text-xs border border-gray-200 bg-white px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-1.5"
                     >
-                      {copied === link.key ? "✓ Copiado" : "Copiar"}
+                      {copied === link.key ? (
+                        <>
+                          <svg
+                            width="12"
+                            height="12"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="text-green-600"
+                          >
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                          </svg>
+                          <span className="text-green-600">Copiado</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg
+                            width="12"
+                            height="12"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="text-blue-500"
+                          >
+                            <rect
+                              x="9"
+                              y="9"
+                              width="13"
+                              height="13"
+                              rx="2"
+                              ry="2"
+                            ></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                          </svg>
+                          Copiar
+                        </>
+                      )}
                     </button>
                   </div>
                 ))}
               </div>
-            </div>
-
-            {/* Cover Letter */}
-            <div className="bg-white border border-gray-200 rounded-xl p-6">
-              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-semibold text-gray-700">
-                    Cover Letter
-                  </h2>
-                  <div className="flex border border-gray-200 rounded-lg overflow-hidden">
-                    {(["es", "en"] as const).map((lang) => (
-                      <button
-                        key={lang}
-                        onClick={() => setCoverLang(lang)}
-                        className={`text-xs px-3 py-1 font-medium transition-colors ${
-                          coverLang === lang
-                            ? "bg-blue-600 text-white"
-                            : "bg-white text-gray-600 hover:bg-gray-50"
-                        }`}
-                      >
-                        {lang === "es" ? "🇦🇷 Español" : "🇺🇸 English"}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => copyCoverAsHTML(coverLetter, "cover")}
-                    className="text-xs border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    {copied === "cover" ? "✓ Copiado" : "Copiar"}
-                  </button>
-                  <button
-                    onClick={saveCoverLetter}
-                    className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    {copied === "saved" ? "✓ Guardado" : "Guardar"}
-                  </button>
-                </div>
-              </div>
-              <textarea
-                value={coverLetter}
-                onChange={(e) => setCoverLetter(e.target.value)}
-                rows={16}
-                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y font-mono"
-              />
             </div>
 
             {/* Direct Message */}
@@ -513,7 +516,7 @@ export default function PerfilPage() {
                     Direct Message
                   </h2>
                   <div className="flex border border-gray-200 rounded-lg overflow-hidden">
-                    {(["es", "en"] as const).map((lang) => (
+                    {(["en", "es"] as const).map((lang) => (
                       <button
                         key={lang}
                         onClick={() => setDMLang(lang)}
@@ -523,7 +526,7 @@ export default function PerfilPage() {
                             : "bg-white text-gray-600 hover:bg-gray-50"
                         }`}
                       >
-                        {lang === "es" ? "🇦🇷 Español" : "🇺🇸 English"}
+                        {lang === "en" ? "🇺🇸 English" : "🇦🇷 Español"}
                       </button>
                     ))}
                   </div>
@@ -547,6 +550,52 @@ export default function PerfilPage() {
                 value={directMessage}
                 onChange={(e) => setDirectMessage(e.target.value)}
                 rows={12}
+                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y font-mono"
+              />
+            </div>
+
+            {/* Cover Letter */}
+            <div className="bg-white border border-gray-200 rounded-xl p-6">
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-semibold text-gray-700">
+                    Cover Letter
+                  </h2>
+                  <div className="flex border border-gray-200 rounded-lg overflow-hidden">
+                    {(["en", "es"] as const).map((lang) => (
+                      <button
+                        key={lang}
+                        onClick={() => setCoverLang(lang)}
+                        className={`text-xs px-3 py-1 font-medium transition-colors ${
+                          coverLang === lang
+                            ? "bg-blue-600 text-white"
+                            : "bg-white text-gray-600 hover:bg-gray-50"
+                        }`}
+                      >
+                        {lang === "en" ? "🇺🇸 English" : "🇦🇷 Español"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => copyCoverAsHTML(coverLetter, "cover")}
+                    className="text-xs border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    {copied === "cover" ? "✓ Copiado" : "Copiar"}
+                  </button>
+                  <button
+                    onClick={saveCoverLetter}
+                    className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    {copied === "saved" ? "✓ Guardado" : "Guardar"}
+                  </button>
+                </div>
+              </div>
+              <textarea
+                value={coverLetter}
+                onChange={(e) => setCoverLetter(e.target.value)}
+                rows={16}
                 className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y font-mono"
               />
             </div>
