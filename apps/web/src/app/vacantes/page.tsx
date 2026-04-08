@@ -10,12 +10,10 @@ import type { JobPost, JobFilters } from '@/types'
 
 const TODAY = new Date().toISOString().split('T')[0]
 
-type SortOption = 'newest' | 'oldest' | 'applied' | 'not-applied'
+type SortOption = 'newest' | 'oldest'
 const SORT_LABELS: Record<SortOption, string> = {
   'newest':      'Más reciente',
   'oldest':      'Más antiguo',
-  'applied':     'Postulados primero',
-  'not-applied': 'Sin postular primero',
 }
 
 export default function VacantesPage() {
@@ -30,15 +28,11 @@ export default function VacantesPage() {
   const [sort, setSort]             = useState<SortOption>('newest')
   const [deleting, setDeleting]     = useState<string | null>(null)
   const [clearingAll, setClearingAll] = useState(false)
-  const [applied, setApplied]       = useState<Set<string>>(new Set())
+  const [isScraping, setIsScraping] = useState(false)
   const [alertMsg, setAlertMsg]     = useState<string | null>(null)
   const [confirmClear, setConfirmClear] = useState(false)
 
   const PAGE_SIZE = 25
-
-  useEffect(() => {
-    getApplications().then(apps => setApplied(new Set(apps.map(a => a.jobId))))
-  }, [])
 
   const fetchJobs = useCallback(async () => {
     setLoading(true)
@@ -79,7 +73,6 @@ export default function VacantesPage() {
       status:   'applied',
       currency: 'USD',
     })
-    setApplied(prev => new Set([...prev, job.id]))
     router.push('/postulaciones')
   }
 
@@ -114,13 +107,32 @@ export default function VacantesPage() {
     }
   }
 
+  const handleBuscarVacantes = async () => {
+    setIsScraping(true)
+    try {
+      const res = await fetch('/api/scrape', { method: 'POST' })
+      const data = await res.json()
+      
+      if (res.ok && data.success) {
+         await fetchJobs()
+         setAlertMsg(`¡Búsqueda finalizada! Se agregaron ${data.count} empleos desde LinkedIn.`)
+      } else {
+         throw new Error(data.error || 'Error desconocido')
+      }
+    } catch(err: any) {
+      console.error(err)
+      setAlertMsg("Error al intentar buscar vacantes (asegurate de tener python3): " + err.message)
+    } finally {
+      setIsScraping(false)
+    }
+  }
+
   return (
     <>
     <AlertModal
       open={!!alertMsg}
-      title="Error"
+      title="Aviso"
       message={alertMsg ?? ''}
-      variant="error"
       onClose={() => setAlertMsg(null)}
     />
     <ConfirmModal
@@ -139,7 +151,7 @@ export default function VacantesPage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Vacantes</h1>
-            <p className="text-gray-500 text-sm mt-1">{total} oportunidades</p>
+            <p className="text-gray-500 text-sm mt-1">{total} oportunidades pendientes</p>
           </div>
           <div className="flex gap-2">
             <button
@@ -150,16 +162,27 @@ export default function VacantesPage() {
               {clearingAll ? 'Vaciando...' : 'Vaciar todo'}
             </button>
             <button
-              onClick={fetchJobs}
-              className="text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              onClick={handleBuscarVacantes}
+              disabled={isScraping || loading}
+              className="flex items-center gap-2 text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-75 disabled:cursor-not-allowed shadow-sm"
             >
-              Actualizar
+              {isScraping ? (
+                <>
+                  <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Buscando en LinkedIn...
+                </>
+              ) : (
+                '⚡ Buscar Vacantes'
+              )}
             </button>
           </div>
         </div>
 
         {/* Filters */}
-        <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6 flex flex-wrap gap-3">
+        <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6 flex flex-wrap gap-3 shadow-sm">
           <input
             type="text"
             placeholder="Buscar por título o empresa..."
@@ -203,15 +226,13 @@ export default function VacantesPage() {
           </div>
         ) : jobs.length === 0 ? (
           <div className="text-center py-20 text-gray-500">
-            <p className="text-lg font-medium">No hay vacantes todavía</p>
-            <p className="text-sm mt-2">Ejecutá el workflow en n8n para importar vacantes.</p>
+            <p className="text-lg font-medium">No hay vacantes pendientes</p>
+            <p className="text-sm mt-2">Nuevas oportunidades aparecerán aquí tras realizar un scrape.</p>
           </div>
         ) : (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {[...jobs].sort((a, b) => {
-                if (sort === 'applied')     return (applied.has(b.id) ? 1 : 0) - (applied.has(a.id) ? 1 : 0)
-                if (sort === 'not-applied') return (applied.has(a.id) ? 1 : 0) - (applied.has(b.id) ? 1 : 0)
                 const dateA = new Date(a.postedAt || a.createdAt || 0).getTime()
                 const dateB = new Date(b.postedAt || b.createdAt || 0).getTime()
                 if (sort === 'oldest') return dateA - dateB
@@ -221,7 +242,6 @@ export default function VacantesPage() {
                   key={job.id}
                   job={job}
                   isNew={(job.postedAt ?? job.createdAt ?? '').startsWith(TODAY)}
-                  isApplied={applied.has(job.id)}
                   deleting={deleting === job.id}
                   onApply={handleApply}
                   onDelete={handleDelete}
@@ -259,11 +279,10 @@ export default function VacantesPage() {
 }
 
 function JobCard({
-  job, isNew, isApplied, deleting, onApply, onDelete,
+  job, isNew, deleting, onApply, onDelete,
 }: {
   job: JobPost
   isNew: boolean
-  isApplied: boolean
   deleting: boolean
   onApply: (job: JobPost, e: React.MouseEvent) => void
   onDelete: (id: string, e: React.MouseEvent) => void
@@ -272,11 +291,7 @@ function JobCard({
     <div className="relative group">
       <Link
         href={`/vacantes/${job.id}`}
-        className={`border rounded-xl p-5 hover:shadow-md transition-all flex flex-col gap-3 block h-full ${
-          isApplied
-            ? 'bg-green-50 border-green-200 hover:border-green-300'
-            : 'bg-white border-gray-200 hover:border-blue-200'
-        }`}
+        className="border border-gray-200 rounded-xl p-5 bg-white hover:border-blue-200 hover:shadow-md transition-all flex flex-col gap-3 block h-full"
       >
         {/* Header */}
         <div className="pr-7">
@@ -285,7 +300,7 @@ function JobCard({
               {job.title}
             </h3>
             {isNew && (
-              <span className="shrink-0 text-xs bg-blue-100 text-blue-700 font-semibold px-2 py-0.5 rounded-full">
+              <span className="shrink-0 text-xs bg-blue-100 text-blue-700 font-semibold px-2 py-0.5 rounded-full shadow-sm">
                 Hoy
               </span>
             )}
@@ -310,7 +325,7 @@ function JobCard({
         {job.requiredSkills && job.requiredSkills.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {job.requiredSkills.slice(0, 4).map(skill => (
-              <span key={skill} className="text-xs bg-gray-100 text-gray-600 rounded px-2 py-0.5">
+              <span key={skill} className="text-xs bg-gray-50 text-gray-600 rounded px-2 py-0.5 border border-gray-100">
                 {skill}
               </span>
             ))}
@@ -342,13 +357,9 @@ function JobCard({
           {/* Apply button */}
           <button
             onClick={e => onApply(job, e)}
-            className={`w-full text-sm font-medium py-2 rounded-lg transition-colors ${
-              isApplied
-                ? 'bg-green-100 text-green-700 cursor-default'
-                : 'bg-blue-600 text-white hover:bg-blue-700'
-            }`}
+            className="w-full text-sm font-bold py-2.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm active:scale-95"
           >
-            {isApplied ? 'Aplicado ✓' : 'Postular →'}
+            Postular →
           </button>
         </div>
       </Link>

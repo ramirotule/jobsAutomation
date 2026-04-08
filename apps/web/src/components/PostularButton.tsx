@@ -16,29 +16,39 @@ export function PostularButton({ jobId, title, company, location, applyUrl }: Pr
   const router = useRouter()
   const [loading, setLoading] = useState(false)
 
-  const handleClick = async () => {
+  const handleApply = async () => {
     setLoading(true)
-    if (applyUrl) window.open(applyUrl, '_blank', 'noopener,noreferrer')
-    await saveApplication({
-      jobId,
-      title,
-      company,
-      location,
-      applyUrl,
-      appliedAt: new Date().toISOString(),
-      status:    'applied',
-      currency:  'USD',
-    })
-    router.push('/postulaciones')
+    
+    try {
+      const newApp = await saveApplication({
+        jobId,
+        title,
+        company,
+        location,
+        applyUrl,
+        appliedAt: new Date().toISOString(),
+        status:    'applied',
+        currency:  'USD',
+      })
+      
+      if (newApp) {
+        router.push(`/postulaciones/${newApp.id}`)
+      } else {
+        router.push('/postulaciones')
+      }
+    } catch (error) {
+      console.error('Error saving application:', error)
+      setLoading(false)
+    }
   }
 
   return (
     <button
-      onClick={handleClick}
+      onClick={handleApply}
       disabled={loading}
-      className="bg-blue-600 text-white text-sm font-medium px-5 py-2.5 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+      className="bg-blue-600 text-white text-sm font-bold px-6 py-2.5 rounded-xl hover:bg-blue-700 transition-all shadow-md active:scale-95 disabled:opacity-50"
     >
-      {loading ? 'Guardando...' : 'Postular →'}
+      {loading ? 'Preparando...' : 'Postular →'}
     </button>
   )
 }

@@ -94,6 +94,9 @@ export interface JobPost {
   postedAt: string
   isActive: boolean
   createdAt: string
+  // Social media publications tracking
+  socialMediaId?: Record<string, string> // e.g. { instagram: 'id123', facebook: 'id456' }
+  lastSocialMediaPostedAt?: string
   // joined
   sourceName?: string
   sourceSlug?: string

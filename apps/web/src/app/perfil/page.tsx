@@ -44,19 +44,35 @@ export default function PerfilPage() {
   const [coverLang, setCoverLang] = useState<"es" | "en">("es");
   const [coverES, setCoverES] = useState("");
   const [coverEN, setCoverEN] = useState("");
+  
+  const [dmLang, setDMLang] = useState<"es" | "en">("es");
+  const [dmES, setDmES] = useState("");
+  const [dmEN, setDmEN] = useState("");
+
   const [copied, setCopied] = useState<string | null>(null);
 
   useEffect(() => {
     setCoverES(localStorage.getItem("job_hunter_cover_es") ?? COVER_ES);
     setCoverEN(localStorage.getItem("job_hunter_cover_en") ?? COVER_EN);
+    setDmES(localStorage.getItem("job_hunter_dm_es") ?? DM_ES);
+    setDmEN(localStorage.getItem("job_hunter_dm_en") ?? DM_EN);
   }, []);
 
   const coverLetter = coverLang === "es" ? coverES : coverEN;
   const setCoverLetter = coverLang === "es" ? setCoverES : setCoverEN;
 
+  const directMessage = dmLang === "es" ? dmES : dmEN;
+  const setDirectMessage = dmLang === "es" ? setDmES : setDmEN;
+
   function saveCoverLetter() {
     localStorage.setItem(`job_hunter_cover_${coverLang}`, coverLetter);
     setCopied("saved");
+    setTimeout(() => setCopied(null), 2000);
+  }
+
+  function saveDirectMessage() {
+    localStorage.setItem(`job_hunter_dm_${dmLang}`, directMessage);
+    setCopied("saved_dm");
     setTimeout(() => setCopied(null), 2000);
   }
 
@@ -488,6 +504,52 @@ export default function PerfilPage() {
                 className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y font-mono"
               />
             </div>
+
+            {/* Direct Message */}
+            <div className="bg-white border border-gray-200 rounded-xl p-6">
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-semibold text-gray-700">
+                    Direct Message
+                  </h2>
+                  <div className="flex border border-gray-200 rounded-lg overflow-hidden">
+                    {(["es", "en"] as const).map((lang) => (
+                      <button
+                        key={lang}
+                        onClick={() => setDMLang(lang)}
+                        className={`text-xs px-3 py-1 font-medium transition-colors ${
+                          dmLang === lang
+                            ? "bg-blue-600 text-white"
+                            : "bg-white text-gray-600 hover:bg-gray-50"
+                        }`}
+                      >
+                        {lang === "es" ? "🇦🇷 Español" : "🇺🇸 English"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => copyToClipboard(directMessage, "dm")}
+                    className="text-xs border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    {copied === "dm" ? "✓ Copiado" : "Copiar"}
+                  </button>
+                  <button
+                    onClick={saveDirectMessage}
+                    className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    {copied === "saved_dm" ? "✓ Guardado" : "Guardar"}
+                  </button>
+                </div>
+              </div>
+              <textarea
+                value={directMessage}
+                onChange={(e) => setDirectMessage(e.target.value)}
+                rows={12}
+                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y font-mono"
+              />
+            </div>
           </div>
         )}
       </div>
@@ -560,6 +622,32 @@ I'm available for a call or technical interview at your convenience.
 
 Best regards,
 Ramiro Toulemonde`;
+
+const DM_ES = `Hola [Nombre]!
+
+Espero que estés muy bien. Te escribo porque actualmente estoy buscando nuevos desafíos profesionales como Senior Frontend Developer.
+
+Con más de 5 años de experiencia especializándome en React JS y React Native, tengo un historial sólido construyendo aplicaciones web y móviles escalables. Me interesan particularmente aquellos roles donde se valora la calidad del código y las arquitecturas modernas.
+
+Podés ver mi CV, trayectoria y proyectos acá: www.ramirotoulemonde.com.ar
+
+Me encantaría que tengamos una breve llamada para comentar cómo mi experiencia puede sumar a tu equipo.
+
+Saludos,
+Ramiro.`;
+
+const DM_EN = `Hi [Name]!
+
+I hope you're doing well. I'm reaching out because I'm currently looking for new professional challenges as a Senior Frontend Developer.
+
+With over 5 years of experience specializing in React JS and React Native, I have a strong track record of building scalable web and mobile applications. I'm particularly interested in roles that value high-quality code and modern architectures.
+
+You can check out my resume, works and projects here: www.ramirotoulemonde.com.ar
+
+I'd love to jump on a quick call to discuss how my background could contribute to your team.
+
+Best regards,
+Ramiro.`;
 
 const inputCls =
   "w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";

@@ -39,6 +39,8 @@ function mapJobPost(row: any): JobPost {
     postedAt:         row.posted_at ?? '',
     isActive:         row.is_active ?? true,
     createdAt:        row.created_at ?? '',
+    socialMediaId:    row.social_media_id ?? {},
+    lastSocialMediaPostedAt: row.last_social_media_posted_at ?? '',
   }
 }
 
@@ -47,8 +49,9 @@ export async function getJobPosts(
   page = 0,
   pageSize = 25,
 ): Promise<{ data: JobPost[]; total: number }> {
+  // Use the view that excludes applied jobs by default as per user request
   let query = supabase
-    .from('job_posts')
+    .from('v_available_vacancies')
     .select('*', { count: 'exact' })
     .order('posted_at', { ascending: false, nullsFirst: false })
     .range(page * pageSize, (page + 1) * pageSize - 1)
