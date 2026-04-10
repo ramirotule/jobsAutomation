@@ -441,6 +441,31 @@ export default function PerfilPage() {
 
         {activeTab === "kit" && (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            {/* Quick Links Section */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <LinkCard 
+                icon="💼" 
+                label="LinkedIn" 
+                url={linkedin_url} 
+                isCopied={copied === 'li'} 
+                onCopy={() => copyToClipboard(linkedin_url, 'li')} 
+              />
+              <LinkCard 
+                icon="🐙" 
+                label="GitHub" 
+                url={github_url} 
+                isCopied={copied === 'gh'} 
+                onCopy={() => copyToClipboard(github_url, 'gh')} 
+              />
+              <LinkCard 
+                icon="🌐" 
+                label="Portfolio" 
+                url={portfolio_url} 
+                isCopied={copied === 'pf'} 
+                onCopy={() => copyToClipboard(portfolio_url, 'pf')} 
+              />
+            </div>
+
             <div className="bg-white border border-gray-200 rounded-xl p-6">
               <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                 <div className="flex items-center gap-2">
@@ -477,12 +502,6 @@ export default function PerfilPage() {
                 className={`${inputCls} font-mono`}
                 placeholder="Escribe tu carta de presentación..."
               />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <LinkCard icon="💼" label="LinkedIn" url={linkedin_url} isCopied={copied === 'li'} onCopy={() => copyToClipboard(linkedin_url, 'li')} />
-              <LinkCard icon="🐙" label="GitHub" url={github_url} isCopied={copied === 'gh'} onCopy={() => copyToClipboard(github_url, 'gh')} />
-              <LinkCard icon="🌐" label="Portfolio" url={portfolio_url} isCopied={copied === 'pf'} onCopy={() => copyToClipboard(portfolio_url, 'pf')} />
             </div>
 
             <div className="pt-2">
@@ -643,15 +662,20 @@ function LangToggle({ current, onChange }: { current: "es" | "en", onChange: (l:
 
 function LinkCard({ icon, label, url, isCopied, onCopy }: { icon: string, label: string, url: string, isCopied: boolean, onCopy: () => void }) {
   return (
-    <div className="bg-white border border-gray-200 p-4 rounded-xl flex flex-col gap-2">
-      <span className="text-xl">{icon}</span>
-      <p className="text-xs font-bold text-gray-400 uppercase">{label}</p>
-      <button 
-        onClick={onCopy} 
-        className={`text-xs font-bold hover:underline text-left truncate ${url ? 'text-indigo-600' : 'text-gray-300 italic'}`}
-      >
-        {isCopied ? "¡Copiado!" : (url || "No configurado")}
-      </button>
+    <div 
+      onClick={onCopy}
+      className={`bg-white border rounded-xl p-4 transition-all cursor-pointer active:scale-95 select-none text-left flex flex-col gap-2 ${
+        isCopied ? 'border-green-500 shadow-md shadow-green-50' : 'border-gray-200 hover:border-indigo-300 hover:shadow-md hover:-translate-y-0.5'
+      }`}
+    >
+      <div className="flex items-center justify-between">
+        <span className="text-xl">{icon}</span>
+        {isCopied && <span className="text-[10px] font-bold text-green-600 uppercase">✓ Copiado</span>}
+      </div>
+      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{label}</p>
+      <p className={`text-xs font-bold truncate ${url ? (isCopied ? 'text-green-600' : 'text-indigo-600') : 'text-gray-300 italic'}`}>
+        {url || "No configurado"}
+      </p>
     </div>
   )
 }

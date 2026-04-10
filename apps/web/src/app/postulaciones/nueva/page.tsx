@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   saveApplication,
@@ -34,11 +34,12 @@ const getLocalDatetime = () => {
   return now.toISOString().slice(0, 16);
 };
 
-export default function NuevaPostulacionPage() {
+function NuevaPostulacionContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    title: "Frontend Developer",
+    title: "",
     company: "",
     location: "",
     applyUrl: "",
@@ -51,6 +52,23 @@ export default function NuevaPostulacionPage() {
     contactType: "self_initiated" as "self_initiated" | "recruiter_initiated",
     notes: "",
   });
+
+  useEffect(() => {
+    const title = searchParams.get("title");
+    const company = searchParams.get("company");
+    const url = searchParams.get("url");
+    const loc = searchParams.get("location");
+
+    if (title || company || url || loc) {
+      setFormData(prev => ({
+        ...prev,
+        title: title || prev.title,
+        company: company || prev.company,
+        applyUrl: url || prev.applyUrl,
+        location: loc || prev.location,
+      }));
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -364,5 +382,13 @@ export default function NuevaPostulacionPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function NuevaPostulacionPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-50 flex items-center justify-center">Cargando formulario...</div>}>
+      <NuevaPostulacionContent />
+    </Suspense>
   );
 }

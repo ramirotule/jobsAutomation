@@ -6,16 +6,21 @@ from jobspy import scrape_jobs
 def main():
     try:
         # site = sys.argv[1] if len(sys.argv) > 1 else "linkedin"
+        search_term = sys.argv[2] if len(sys.argv) > 2 else "frontend developer"
+        hours_old = int(sys.argv[3]) if len(sys.argv) > 3 else 24
         
-        # Scrapear empleos usando la librería real JobSpy
+        # Scrapear empleos usando múltiples portales soportados por JobSpy
         jobs = scrape_jobs(
             site_name=["linkedin"], 
-            search_term="React Native", 
-            location="Argentina", 
+            search_term=search_term, 
+            location="Remote", 
             is_remote=True,
+            job_type="fulltime",  # <--- Aquí aplicas el filtro
             results_wanted=15, 
-            hours_old=72
+            hours_old=hours_old,
+            country_indeed='argentina' # Opción para Indeed Argentina
         )
+
 
         # JobSpy retorna un DataFrame de Pandas
         # Opcional: Exportar a CSV
@@ -23,21 +28,31 @@ def main():
         
         # Guardar en una lista mapeando las propiedades para nuestra base de datos
         jobs_list = []
+        seen_jobs = set() # Para evitar duplicados de (titulo, empresa)
+
         for index, row in jobs.iterrows():
             # Limpiar campos para evitar NaNs
-            title = str(row.get("title", ""))
-            company = str(row.get("company", ""))
-            location = str(row.get("location", ""))
+            title = str(row.get("title", "")).strip()
+            company = str(row.get("company", "")).strip()
+            location = str(row.get("location", "")).strip()
             url = str(row.get("job_url", ""))
             description = str(row.get("description", ""))
             
             if title and title != "nan":
+                # Deduplicación ultra-agresiva: Una sola vacante por empresa
+                job_key = company.lower()
+                if job_key in seen_jobs:
+                    continue
+                seen_jobs.add(job_key)
+
                 # Filtro: Omitir puestos de Brasil para evitar portugués
                 location_lower = location.lower()
                 if "brazil" in location_lower or "brasil" in location_lower:
                     continue
 
                 jobs_list.append({
+                    "external_id": str(row.get("id", index)), # ID único de la plataforma
+                    "site": str(row.get("site", "linkedin")),
                     "title": title,
                     "company": company if company != "nan" else "",
                     "location": location if location != "nan" else "",

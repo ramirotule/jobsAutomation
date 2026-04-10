@@ -5,6 +5,7 @@ import { HighlightedDescription } from "@/components/HighlightedDescription";
 import { JobViewerButton } from "@/components/JobViewer";
 import { DeleteJobButton } from "@/components/DeleteJobButton";
 import { PostularButton } from "@/components/PostularButton";
+import { AIMatch } from "@/components/AIMatch";
 
 export default async function JobDetailPage({
   params,
@@ -54,7 +55,6 @@ export default async function JobDetailPage({
                 </div>
                 {job.applyUrl && (
                   <div className="flex items-center gap-2 shrink-0">
-                    <JobViewerButton url={job.applyUrl} title={job.title} />
                     <PostularButton
                       jobId={job.id}
                       title={job.title}
@@ -121,20 +121,15 @@ export default async function JobDetailPage({
               </div>
             )}
 
-            {/* Description */}
-            {job.description && (
-              <div className="px-6 py-5">
-                <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">
-                  Descripción
-                </h2>
-                <HighlightedDescription text={job.description} />
-              </div>
-            )}
-
-            {/* Footer CTA */}
-            <div className="px-6 py-5 bg-gray-50 border-t border-gray-100 flex justify-center">
-              <DeleteJobButton id={job.id} />
+            {/* AI Match Analysis */}
+            <div className="px-6 py-5 bg-indigo-50/30 border-t border-indigo-100">
+               <AIMatch 
+                 jobDescription={job.description || "N/A"} 
+                 jobId={job.id} 
+               />
             </div>
+
+
           </div>
         </div>
       </div>

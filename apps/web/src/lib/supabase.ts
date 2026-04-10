@@ -97,11 +97,31 @@ export async function deleteJobPost(id: string): Promise<void> {
 }
 
 export async function deleteAllJobPosts(): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
   const { error } = await supabase
     .from('job_posts')
     .delete()
-    .not('id', 'is', null)
+    .eq('user_id', user.id)
 
+  if (error) throw error
+}
+
+export async function deleteFilteredJobPosts(filters: JobFilters): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  let query = supabase
+    .from('job_posts')
+    .delete()
+    .eq('user_id', user.id)
+
+  if (filters.search) {
+    query = query.or(`title.ilike.%${filters.search}%,company.ilike.%${filters.search}%`)
+  }
+
+  const { error } = await query
   if (error) throw error
 }
 

@@ -78,7 +78,7 @@ export default function PostulacionDetailPage() {
         location: data.location ?? "",
         applyUrl: data.applyUrl ?? "",
         appliedAt: data.appliedAt
-          ? new Date(data.appliedAt).toISOString().split("T")[0]
+          ? new Date(data.appliedAt).toISOString().slice(0, 16)
           : "",
         status: data.status,
         salaryExpectation: data.salaryExpectation ? formatAmount(data.salaryExpectation.toString()) : "",
@@ -184,12 +184,11 @@ export default function PostulacionDetailPage() {
               <div className="pt-2 flex flex-col gap-2">
                 <button
                   onClick={() => {
-                    handleSave();
                     setShowInterviewModal(false);
                   }}
                   className="w-full bg-purple-600 text-white font-bold py-3 rounded-xl hover:bg-purple-700 transition-colors shadow-md"
                 >
-                  Guardar y Agendar
+                  Confirmar Horario
                 </button>
                 <button
                   onClick={() => setShowInterviewModal(false)}
@@ -249,7 +248,7 @@ export default function PostulacionDetailPage() {
                 Fecha de postulación
               </label>
               <input
-                type="date"
+                type="datetime-local"
                 value={form.appliedAt}
                 onChange={(e) => set("appliedAt", e.target.value)}
                 className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2"

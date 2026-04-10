@@ -20,10 +20,17 @@ const STATUS_ORDER: AppStatus[] = [
   "ghosted",
 ];
 
+type SortOption = "newest" | "oldest";
+const SORT_LABELS: Record<SortOption, string> = {
+  newest: "Más reciente",
+  oldest: "Más antiguo",
+};
+
 export default function PostulacionesPage() {
   const [apps, setApps] = useState<StoredApplication[]>([]);
   const [filter, setFilter] = useState<AppStatus | "all">("all");
   const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<SortOption>("newest");
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -32,7 +39,8 @@ export default function PostulacionesPage() {
 
   const filtered =
     filter === "all" ? apps : apps.filter((a) => a.status === filter);
-  const visible =
+  
+  const searched =
     search.trim() === ""
       ? filtered
       : filtered.filter(
@@ -40,6 +48,12 @@ export default function PostulacionesPage() {
             a.title.toLowerCase().includes(search.toLowerCase()) ||
             a.company.toLowerCase().includes(search.toLowerCase()),
         );
+
+  const visible = [...searched].sort((a, b) => {
+    const dateA = new Date(a.appliedAt || 0).getTime();
+    const dateB = new Date(b.appliedAt || 0).getTime();
+    return sort === "newest" ? dateB - dateA : dateA - dateB;
+  });
 
   const counts = STATUS_ORDER.reduce(
     (acc, s) => {
@@ -112,7 +126,7 @@ export default function PostulacionesPage() {
           </div>
 
           {/* Search Bar */}
-          <div className="relative mb-6">
+          <div className="relative mb-6 flex gap-3">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -129,34 +143,38 @@ export default function PostulacionesPage() {
                 />
               </svg>
             </div>
-            <input
-              type="text"
-              placeholder="Buscar por puesto o empresa..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="block w-full pl-10 pr-3 py-2.5 border border-gray-200 rounded-xl leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all"
-            />
-            {search && (
-              <button
-                onClick={() => setSearch("")}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-4 w-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
+            <div className="flex-1 relative group">
+              <input
+                type="text"
+                placeholder="Buscar por puesto o empresa..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="block w-full pl-10 pr-10 py-2.5 border border-gray-200 rounded-xl leading-5 bg-white placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-all shadow-sm"
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch("")}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l18 18"
-                  />
-                </svg>
-              </button>
-            )}
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-xl p-1 shadow-sm">
+              {(Object.keys(SORT_LABELS) as SortOption[]).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setSort(s)}
+                  className={`text-[10px] uppercase font-black tracking-widest px-3 py-1.5 rounded-lg transition-all ${
+                    sort === s
+                      ? "bg-gray-900 text-white shadow-sm"
+                      : "bg-white text-gray-400 hover:text-gray-600"
+                  }`}
+                >
+                  {SORT_LABELS[s]}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Filter tabs */}

@@ -5,6 +5,7 @@ import "./globals.css";
 import { createClient } from "@/utils/supabase/server";
 import { cookies } from "next/headers";
 import LogoutButton from "@/components/auth/LogoutButton";
+import SocialLinks from "@/components/SocialLinks";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -48,10 +49,28 @@ export default async function RootLayout({
   const firstName = user.user_metadata?.first_name || "Usuario";
   const lastName = user.user_metadata?.last_name || "";
 
+  // Fetch social links for current user
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("linkedin_url, github_url, portfolio_url")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const userLinks = {
+    linkedin: profile?.linkedin_url || "",
+    github: profile?.github_url || "",
+    portfolio: profile?.portfolio_url || "",
+  };
+
   return (
     <html lang="es">
-      <body className={`${inter.className} bg-gray-50 text-gray-900`}>
+      <body 
+        className={`${inter.className} bg-gray-50 text-gray-900`}
+        suppressHydrationWarning
+      >
         <div className="flex min-h-screen">
+          <SocialLinks {...userLinks} />
+          
           <aside className="w-56 bg-gray-100 border-r border-gray-200 fixed inset-y-0 left-0 flex flex-col">
             <div className="px-6 py-5 border-b border-gray-200">
               <span className="font-bold text-gray-900 text-sm">
