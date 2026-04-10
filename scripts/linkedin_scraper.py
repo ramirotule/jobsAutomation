@@ -5,21 +5,33 @@ from jobspy import scrape_jobs
 
 def main():
     try:
-        # site = sys.argv[1] if len(sys.argv) > 1 else "linkedin"
+        site = sys.argv[1] if len(sys.argv) > 1 else "linkedin"
         search_term = sys.argv[2] if len(sys.argv) > 2 else "frontend developer"
         hours_old = int(sys.argv[3]) if len(sys.argv) > 3 else 24
         
-        # Scrapear empleos usando múltiples portales soportados por JobSpy
-        jobs = scrape_jobs(
-            site_name=["linkedin"], 
-            search_term=search_term, 
-            location="Remote", 
-            is_remote=True,
-            job_type="fulltime",  # <--- Aquí aplicas el filtro
-            results_wanted=15, 
-            hours_old=hours_old,
-            country_indeed='argentina' # Opción para Indeed Argentina
-        )
+        # Determinar qué sitios scrapear
+        # Si site es "all", usamos una lista balanceada
+        site_names = [site] if site != "all" else ["linkedin", "indeed", "glassdoor"]
+        
+        # Scrapear empleos
+        scrape_params = {
+            "site_name": site_names,
+            "location": "Remote",
+            "is_remote": True,
+            "job_type": "fulltime",
+            "results_wanted": 15,
+            "hours_old": hours_old,
+            "country_indeed": 'argentina'
+        }
+
+        # Manejo especial para Google (requiere google_search_term)
+        if "google" in site_names:
+            scrape_params["google_search_term"] = search_term
+            print("Holaaaaa toy aca ")
+        else:
+            scrape_params["search_term"] = search_term
+
+        jobs = scrape_jobs(**scrape_params)
 
 
         # JobSpy retorna un DataFrame de Pandas

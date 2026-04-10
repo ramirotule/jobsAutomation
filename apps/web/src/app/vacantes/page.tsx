@@ -218,9 +218,9 @@ export default function VacantesPage() {
       <ScrapeModal
         open={showScrapeModal}
         onClose={() => setShowScrapeModal(false)}
-        onConfirm={(term, hours) => {
+        onConfirm={(site, term, hours) => {
           setShowScrapeModal(false);
-          handleBuscarVacantes("all", term, hours);
+          handleBuscarVacantes(site, term, hours);
         }}
         initialTerm={scrapeTerm}
         initialHours={scrapeHours}
@@ -418,6 +418,12 @@ export default function VacantesPage() {
           )}
         </div>
       </div>
+      
+      <AlertModal 
+        open={!!alertMsg} 
+        onClose={() => setAlertMsg(null)} 
+        message={alertMsg || ""} 
+      />
     </>
   );
 }
@@ -603,12 +609,21 @@ function ScrapeModal({
 }: {
   open: boolean;
   onClose: () => void;
-  onConfirm: (term: string, hours: number) => void;
+  onConfirm: (site: string, term: string, hours: number) => void;
   initialTerm: string;
   initialHours: number;
 }) {
   const [term, setTerm] = useState(initialTerm);
   const [hours, setHours] = useState(initialHours);
+  const [site, setSite] = useState("all");
+
+  const SITES = [
+    { id: "all", label: "Todos", icon: "🌍" },
+    { id: "linkedin", label: "LinkedIn", icon: "🔗" },
+    { id: "indeed", label: "Indeed", icon: "💼" },
+    { id: "glassdoor", label: "Glassdoor", icon: "🏢" },
+    { id: "google", label: "Google", icon: "🔍" },
+  ];
 
   if (!open) return null;
 
@@ -648,13 +663,35 @@ function ScrapeModal({
         <div className="space-y-5">
           <div>
             <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">
-              Título del trabajo que buscás
+              Plataforma
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {SITES.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => setSite(s.id)}
+                  className={`flex flex-col items-center gap-1 p-2 rounded-xl border-2 transition-all ${
+                    site === s.id
+                      ? "border-indigo-600 bg-indigo-50 text-indigo-700"
+                      : "border-gray-100 bg-gray-50 text-gray-400 hover:border-gray-200"
+                  }`}
+                >
+                  <span className="text-lg">{s.icon}</span>
+                  <span className="text-[10px] font-bold uppercase">{s.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">
+              {site === 'google' ? 'Término de búsqueda de Google' : 'Título del trabajo'}
             </label>
             <input
               type="text"
               value={term}
               onChange={(e) => setTerm(e.target.value)}
-              placeholder="Ej: Frontend Developer, React..."
+              placeholder={site === 'google' ? "Ej: software engineer jobs remote..." : "Ej: Frontend Developer, React..."}
               className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 text-sm focus:bg-white focus:ring-4 focus:ring-indigo-50 focus:border-indigo-200 transition-all outline-none font-medium text-gray-700"
               autoFocus
             />
@@ -693,7 +730,7 @@ function ScrapeModal({
             Cancelar
           </button>
           <button
-            onClick={() => onConfirm(term, hours)}
+            onClick={() => onConfirm(site, term, hours)}
             disabled={!term.trim()}
             className="flex-[2] bg-indigo-600 text-white text-sm font-bold py-3.5 rounded-2xl hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all active:scale-95 disabled:opacity-50 disabled:grayscale"
           >
@@ -704,3 +741,4 @@ function ScrapeModal({
     </div>
   );
 }
+

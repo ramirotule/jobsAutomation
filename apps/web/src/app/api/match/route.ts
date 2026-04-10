@@ -20,8 +20,40 @@ export async function POST(request: Request) {
       supabase.from("resumes").select("raw_text").eq("user_id", user.id).eq("is_active", true).maybeSingle(),
     ]);
 
-    if (!jobDescription || jobDescription === "None" || jobDescription === "N/A" || jobDescription.length < 20) {
-      return NextResponse.json({ error: "La vacante no tiene una descripción válida para analizar. El scraper no pudo extraer el texto del empleo." }, { status: 400 });
+    let finalDescription = jobDescription;
+
+    // Si no hay descripción válida, intentamos hidratarla (SCRAPING PROFUNDO)
+    if (!finalDescription || finalDescription === "None" || finalDescription === "N/A" || finalDescription.length < 50) {
+      console.log(`Descripción insuficiente para vacante ${jobId}. Iniciando hidratación automática...`);
+      
+      const { data: jobData } = await supabase
+        .from("job_posts")
+        .select("apply_url")
+        .eq("id", jobId)
+        .single();
+
+      if (jobData?.apply_url) {
+        // Importación dinámica para no cargar puppeteer si no es necesario
+        const { scrapeLinkedInDescription } = await import("@/lib/scraper");
+        const hydrated = await scrapeLinkedInDescription(jobData.apply_url);
+        
+        if (hydrated && hydrated.length > 50) {
+          finalDescription = hydrated;
+          console.log(`✅ Hidratación exitosa (${hydrated.length} chars). Guardando en DB.`);
+          
+          await supabase
+            .from("job_posts")
+            .update({ description: hydrated })
+            .eq("id", jobId);
+        }
+      }
+    }
+
+    // Validación final después de intentar hidratar
+    if (!finalDescription || finalDescription === "None" || finalDescription === "N/A" || finalDescription.length < 20) {
+      return NextResponse.json({ 
+        error: "No se pudo obtener la descripción del empleo automáticamente. Intenta entrar manualmente al link de LinkedIn." 
+      }, { status: 400 });
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
@@ -51,7 +83,7 @@ export async function POST(request: Request) {
       ${resume?.raw_text || "No disponible"}
       
       VACANTE (Descripción):
-      ${jobDescription}
+      ${finalDescription}
       
       RESPUESTA (JSON):
       {

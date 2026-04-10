@@ -11,6 +11,7 @@ export type AppStatus =
   | 'offer'
   | 'rejected'
   | 'ghosted'
+  | 'ignored'
 
 export interface StoredApplication {
   id: string           // UUID from applications table
@@ -40,6 +41,7 @@ export const STATUS_LABELS: Record<AppStatus, string> = {
   offer:     'Oferta',
   rejected:  'Rechazado',
   ghosted:   'Ghosteado',
+  ignored:   'Ignorado',
 }
 
 export const STATUS_COLORS: Record<AppStatus, string> = {
@@ -49,6 +51,7 @@ export const STATUS_COLORS: Record<AppStatus, string> = {
   offer:     'bg-green-100 text-green-700',
   rejected:  'bg-red-100 text-red-700',
   ghosted:   'bg-gray-100 text-gray-600',
+  ignored:   'bg-orange-100 text-orange-700',
 }
 
 function mapRow(row: Record<string, unknown>): StoredApplication {
@@ -149,4 +152,11 @@ export async function updateApplication(id: string, updates: Partial<StoredAppli
 
 export async function deleteApplication(id: string): Promise<void> {
   await supabase.from('applications').delete().eq('id', id)
+}
+
+export async function bulkUpdateApplicationStatus(ids: string[], status: AppStatus): Promise<void> {
+  await supabase
+    .from('applications')
+    .update({ status })
+    .in('id', ids)
 }

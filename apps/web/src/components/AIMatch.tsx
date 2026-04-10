@@ -40,36 +40,23 @@ export function AIMatch({ jobDescription, jobId }: { jobDescription: string; job
   if (!result && !analyzing) {
     return (
       <div className="flex flex-col items-center py-6">
-        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 ${isBadDescription ? 'bg-amber-100 text-amber-600' : 'bg-indigo-100 text-indigo-600 animate-pulse'}`}>
-           {isBadDescription ? '⚠️' : '✨'}
+        <div className="w-12 h-12 bg-indigo-100 rounded-2xl flex items-center justify-center mb-4 text-indigo-600 animate-pulse">
+           {isBadDescription ? '🔍' : '✨'}
         </div>
         <h3 className="text-sm font-bold text-gray-900 mb-1">Análisis de Match con IA</h3>
         
-        {isBadDescription ? (
-          <>
-            <p className="text-xs text-amber-700 mb-4 text-center max-w-xs">
-              Esta vacante no tiene una descripción detallada. No podemos realizar el análisis sin el texto del empleo.
-            </p>
-            <button
-              disabled
-              className="bg-gray-200 text-gray-400 text-xs font-bold px-6 py-2.5 rounded-xl cursor-not-allowed"
-            >
-              Análisis No Disponible
-            </button>
-          </>
-        ) : (
-          <>
-            <p className="text-xs text-gray-500 mb-4 text-center max-w-xs">
-              Comparamos automáticamente tus skills y CV con esta vacante.
-            </p>
-            <button
-              onClick={startAnalysis}
-              className="bg-indigo-600 text-white text-xs font-bold px-6 py-2.5 rounded-xl hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 active:scale-95"
-            >
-              Analizar Compatibilidad
-            </button>
-          </>
-        )}
+        <p className="text-xs text-gray-500 mb-4 text-center max-w-xs">
+          {isBadDescription 
+            ? "Esta vacante no tiene descripción. Hacé clic para intentar recuperarla de LinkedIn y analizarla." 
+            : "Comparamos automáticamente tus skills y CV con esta vacante."}
+        </p>
+        
+        <button
+          onClick={startAnalysis}
+          className="bg-indigo-600 text-white text-xs font-bold px-6 py-2.5 rounded-xl hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 active:scale-95"
+        >
+          {isBadDescription ? "Obtener descripción y analizar" : "Analizar Compatibilidad"}
+        </button>
         
         {error && <p className="mt-3 text-xs text-red-500 bg-red-50 px-3 py-1.5 rounded-lg">{error}</p>}
       </div>

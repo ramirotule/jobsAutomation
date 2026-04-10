@@ -5,7 +5,7 @@ import "./globals.css";
 import { createClient } from "@/utils/supabase/server";
 import { cookies } from "next/headers";
 import LogoutButton from "@/components/auth/LogoutButton";
-import SocialLinks from "@/components/SocialLinks";
+import { UtilityToolbar } from "@/components/UtilityToolbar";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -56,11 +56,7 @@ export default async function RootLayout({
     .eq("id", user.id)
     .maybeSingle();
 
-  const userLinks = {
-    linkedin: profile?.linkedin_url || "",
-    github: profile?.github_url || "",
-    portfolio: profile?.portfolio_url || "",
-  };
+  // El perfil se carga directamente en UtilityToolbar
 
   return (
     <html lang="es">
@@ -69,7 +65,7 @@ export default async function RootLayout({
         suppressHydrationWarning
       >
         <div className="flex min-h-screen">
-          <SocialLinks {...userLinks} />
+          <UtilityToolbar />
           
           <aside className="w-56 bg-gray-100 border-r border-gray-200 fixed inset-y-0 left-0 flex flex-col">
             <div className="px-6 py-5 border-b border-gray-200">
