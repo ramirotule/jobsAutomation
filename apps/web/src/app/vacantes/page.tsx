@@ -113,7 +113,7 @@ export default function VacantesPage() {
   const handleApply = (job: JobPost, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     // Redirigir al formulario de nueva postulación con la data precargada
     const params = new URLSearchParams();
     params.set("title", job.title || "");
@@ -162,16 +162,20 @@ export default function VacantesPage() {
     }
   };
 
-  const handleBuscarVacantes = async (site: string, searchTerm?: string, hoursOld?: number) => {
+  const handleBuscarVacantes = async (
+    site: string,
+    searchTerm?: string,
+    hoursOld?: number,
+  ) => {
     setIsScraping(site);
     try {
       const res = await fetch("/api/scrape", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          site, 
+        body: JSON.stringify({
+          site,
           searchTerm: searchTerm || "frontend developer",
-          hoursOld: hoursOld || 24
+          hoursOld: hoursOld || 24,
         }),
       });
       const data = await res.json();
@@ -315,7 +319,20 @@ export default function VacantesPage() {
                   }}
                   className="absolute inset-y-0 right-0 pr-2 flex items-center text-gray-300 hover:text-gray-500 transition-colors"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
                 </button>
               )}
             </div>
@@ -418,11 +435,11 @@ export default function VacantesPage() {
           )}
         </div>
       </div>
-      
-      <AlertModal 
-        open={!!alertMsg} 
-        onClose={() => setAlertMsg(null)} 
-        message={alertMsg || ""} 
+
+      <AlertModal
+        open={!!alertMsg}
+        onClose={() => setAlertMsg(null)}
+        message={alertMsg || ""}
       />
     </>
   );
@@ -485,7 +502,7 @@ function JobCard({
       >
         <div className="pr-7 pl-8">
           <div className="flex items-start gap-2">
-            <h3 className="font-bold text-gray-900 text-sm leading-snug group-hover:text-indigo-600 transition-colors flex-1">
+            <h3 className="font-bold text-gray-900 text-sm leading-snug group-hover:text-indigo-600 transition-colors flex-1 ">
               {job.title}
             </h3>
             {isNew && (
@@ -531,7 +548,10 @@ function JobCard({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                if (job.applyUrl) window.open(job.applyUrl, "_blank", "noopener,noreferrer");
+                if (job.applyUrl) {
+                  window.open(job.applyUrl, "_blank", "noopener,noreferrer");
+                  window.focus();
+                }
               }}
               className="flex-1 text-center text-[11px] font-bold py-3 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-all active:scale-95"
             >
@@ -677,7 +697,9 @@ function ScrapeModal({
                   }`}
                 >
                   <span className="text-lg">{s.icon}</span>
-                  <span className="text-[10px] font-bold uppercase">{s.label}</span>
+                  <span className="text-[10px] font-bold uppercase">
+                    {s.label}
+                  </span>
                 </button>
               ))}
             </div>
@@ -685,13 +707,19 @@ function ScrapeModal({
 
           <div>
             <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">
-              {site === 'google' ? 'Término de búsqueda de Google' : 'Título del trabajo'}
+              {site === "google"
+                ? "Término de búsqueda de Google"
+                : "Título del trabajo"}
             </label>
             <input
               type="text"
               value={term}
               onChange={(e) => setTerm(e.target.value)}
-              placeholder={site === 'google' ? "Ej: software engineer jobs remote..." : "Ej: Frontend Developer, React..."}
+              placeholder={
+                site === "google"
+                  ? "Ej: software engineer jobs remote..."
+                  : "Ej: Frontend Developer, React..."
+              }
               className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 text-sm focus:bg-white focus:ring-4 focus:ring-indigo-50 focus:border-indigo-200 transition-all outline-none font-medium text-gray-700"
               autoFocus
             />
@@ -741,4 +769,3 @@ function ScrapeModal({
     </div>
   );
 }
-

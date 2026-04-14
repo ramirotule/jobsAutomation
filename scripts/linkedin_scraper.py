@@ -27,7 +27,6 @@ def main():
         # Manejo especial para Google (requiere google_search_term)
         if "google" in site_names:
             scrape_params["google_search_term"] = search_term
-            print("Holaaaaa toy aca ")
         else:
             scrape_params["search_term"] = search_term
 

@@ -31,11 +31,32 @@ export async function POST(request: Request) {
     const resultString = stdout.substring(stdout.indexOf('{'))
     const result = JSON.parse(resultString)
     
-    // 3. Guardar las vacantes extraídas en la DB asociadas al usuario (evitando duplicados)
+    // 3. Obtener empresas a las que ya se postuló en la última semana
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    
+    const { data: recentApps } = await supabase
+      .from('applications')
+      .select('company')
+      .eq('user_id', user.id)
+      .gte('applied_at', oneWeekAgo.toISOString());
+    
+    const excludedCompanies = new Set((recentApps || []).map(a => a.company?.toLowerCase().trim()));
+
+    // 4. Guardar las vacantes extraídas filtrando las ya postuladas
     if (result.data && result.data.length > 0) {
+      const filteredJobs = result.data.filter((job: any) => {
+        const companyName = job.company?.toLowerCase().trim();
+        return !excludedCompanies.has(companyName);
+      });
+
+      if (filteredJobs.length === 0) {
+        return NextResponse.json({ success: true, count: 0, message: "Todas las vacantes encontradas corresponden a empresas donde ya postulaste recientemente." });
+      }
+
       const { error } = await supabase
         .from('job_posts')
-        .upsert(result.data.map((job: any) => ({
+        .upsert(filteredJobs.map((job: any) => ({
           user_id: user.id,
           external_id: job.external_id,
           title: job.title,
@@ -50,9 +71,11 @@ export async function POST(request: Request) {
         console.error("Error al insertar en DB:", error)
         return NextResponse.json({ error: error.message }, { status: 500 })
       }
+      
+      return NextResponse.json({ success: true, count: filteredJobs.length })
     }
 
-    return NextResponse.json({ success: true, count: result.count })
+    return NextResponse.json({ success: true, count: 0 })
   } catch (error: any) {
     console.error("Error al ejecutar script:", error)
     return NextResponse.json({ error: error.message || 'Hubo un error al buscar vacantes' }, { status: 500 })
