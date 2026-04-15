@@ -142,6 +142,27 @@ export default function VacantesPage() {
     }
   };
 
+  const handleIgnore = async (job: JobPost, muteCompany: boolean, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsScraping("ignoring"); // Reuse state or add new one
+    try {
+      const { ignoreJobPost } = await import("@/lib/supabase");
+      await ignoreJobPost(job, muteCompany);
+      
+      setJobs((prev) => 
+        muteCompany 
+          ? prev.filter((j) => j.company !== job.company)
+          : prev.filter((j) => j.id !== job.id)
+      );
+      setAlertMsg(muteCompany ? `Se han silenciado todas las vacantes de ${job.company}.` : "Vacante silenciada. No aparecerá en futuras búsquedas.");
+    } catch (err: any) {
+      setAlertMsg("Error al silenciar: " + err.message);
+    } finally {
+      setIsScraping(null);
+    }
+  };
+
   const handleClearAll = () => setConfirmClear(true);
 
   const doClearAll = async () => {
@@ -160,6 +181,14 @@ export default function VacantesPage() {
     } finally {
       setClearingAll(false);
     }
+  };
+
+  const handleOpenAllJobs = () => {
+    jobs.forEach((job) => {
+      if (job.applyUrl) {
+        window.open(job.applyUrl, "_blank", "noopener,noreferrer");
+      }
+    });
   };
 
   const handleBuscarVacantes = async (
@@ -264,6 +293,13 @@ export default function VacantesPage() {
                   Borrar {selectedIds.size}
                 </button>
               )}
+              <button
+                onClick={handleOpenAllJobs}
+                disabled={jobs.length === 0 || loading}
+                className="text-sm bg-green-600 text-white font-bold px-4 py-2 rounded-xl hover:bg-green-700 transition-all shadow-lg shadow-green-100 disabled:opacity-50"
+              >
+                Abrir todas
+              </button>
               <button
                 onClick={handleClearAll}
                 disabled={clearingAll || loading}
@@ -406,6 +442,7 @@ export default function VacantesPage() {
                       onSelect={(e) => toggleSelect(job.id, e)}
                       onApply={handleApply}
                       onDelete={handleDelete}
+                      onIgnore={handleIgnore}
                     />
                   ))}
               </div>
@@ -453,6 +490,7 @@ function JobCard({
   onSelect,
   onApply,
   onDelete,
+  onIgnore,
 }: {
   job: JobPost;
   isNew: boolean;
@@ -461,8 +499,11 @@ function JobCard({
   onSelect: (e: React.BaseSyntheticEvent) => void;
   onApply: (job: JobPost, e: React.MouseEvent) => void;
   onDelete: (id: string, e: React.MouseEvent) => void;
+  onIgnore: (job: JobPost, muteCompany: boolean, e: React.MouseEvent) => void;
 }) {
   const router = useRouter();
+  const [showMuteMenu, setShowMuteMenu] = useState(false);
+
   return (
     <div
       className={`relative group transition-all ${selected ? "scale-[0.98]" : ""}`}
@@ -500,7 +541,7 @@ function JobCard({
             : "border-gray-200 hover:border-indigo-200 hover:shadow-md"
         }`}
       >
-        <div className="pr-7 pl-8">
+        <div className="pr-12 pl-8">
           <div className="flex items-start gap-2">
             <h3 className="font-bold text-gray-900 text-sm leading-snug group-hover:text-indigo-600 transition-colors flex-1 ">
               {job.title}
@@ -567,31 +608,69 @@ function JobCard({
         </div>
       </div>
 
-      <button
-        onClick={(e) => onDelete(job.id, e)}
-        disabled={deleting}
-        title="Borrar vacante"
-        className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-xl text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all disabled:opacity-50 z-10"
-      >
-        {deleting ? (
-          <span className="w-4 h-4 border-2 border-gray-200 border-t-gray-400 rounded-full animate-spin" />
-        ) : (
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+      <div className="absolute top-4 right-4 flex gap-1 z-10">
+        <div className="relative">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowMuteMenu(!showMuteMenu);
+            }}
+            title="Opciones de silencio"
+            className="w-8 h-8 flex items-center justify-center rounded-xl text-gray-300 hover:text-orange-500 hover:bg-orange-50 transition-all"
           >
-            <polyline points="3 6 5 6 21 6"></polyline>
-            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-          </svg>
-        )}
-      </button>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+          </button>
+          
+          {showMuteMenu && (
+            <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 animate-in fade-in slide-in-from-top-1 duration-200 overflow-hidden">
+              <button
+                onClick={(e) => {
+                  setShowMuteMenu(false);
+                  onIgnore(job, false, e);
+                }}
+                className="w-full text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-gray-600 hover:bg-orange-50 hover:text-orange-600 transition-colors"
+              >
+                No mostrar esta oferta
+              </button>
+              <button
+                onClick={(e) => {
+                  setShowMuteMenu(false);
+                  onIgnore(job, true, e);
+                }}
+                className="w-full text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors"
+              >
+                Silenciar {job.company}
+              </button>
+            </div>
+          )}
+        </div>
+
+        <button
+          onClick={(e) => onDelete(job.id, e)}
+          disabled={deleting}
+          title="Borrar vacante"
+          className="w-8 h-8 flex items-center justify-center rounded-xl text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all disabled:opacity-50"
+        >
+          {deleting ? (
+            <span className="w-4 h-4 border-2 border-gray-200 border-t-gray-400 rounded-full animate-spin" />
+          ) : (
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+          )}
+        </button>
+      </div>
     </div>
   );
 }
@@ -634,7 +713,8 @@ function ScrapeModal({
   initialHours: number;
 }) {
   const [term, setTerm] = useState(initialTerm);
-  const [hours, setHours] = useState(initialHours);
+  const [timeValue, setTimeValue] = useState(initialHours);
+  const [timeUnit, setTimeUnit] = useState<"min" | "hr">("hr");
   const [site, setSite] = useState("all");
 
   const SITES = [
@@ -730,23 +810,60 @@ function ScrapeModal({
               <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider">
                 Antigüedad de la oferta
               </label>
-              <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg">
-                Últimas {hours} {hours === 1 ? "hora" : "horas"}
-              </span>
+              <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+                <button 
+                  onClick={() => { setTimeUnit('min'); setTimeValue(5); }}
+                  className={`text-[9px] font-bold px-2 py-1 rounded-md transition-all ${timeUnit === 'min' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`}
+                >
+                  MIN
+                </button>
+                <button 
+                  onClick={() => { setTimeUnit('hr'); setTimeValue(1); }}
+                  className={`text-[9px] font-bold px-2 py-1 rounded-md transition-all ${timeUnit === 'hr' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`}
+                >
+                  HRS
+                </button>
+              </div>
             </div>
-            <input
-              type="range"
-              min="1"
-              max="24"
-              value={hours}
-              onChange={(e) => setHours(parseInt(e.target.value))}
-              className="w-full h-2 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-            />
-            <div className="flex justify-between mt-2 text-[10px] font-bold text-gray-300 uppercase tracking-widest">
-              <span>1h</span>
-              <span>12h</span>
-              <span>24h</span>
-            </div>
+
+            {timeUnit === 'min' ? (
+              <div className="grid grid-cols-4 gap-2 mb-2">
+                {[5, 10, 15, 20].map(v => (
+                  <button
+                    key={v}
+                    onClick={() => setTimeValue(v)}
+                    className={`py-2 rounded-xl text-xs font-bold border-2 transition-all ${
+                      timeValue === v 
+                        ? 'border-indigo-600 bg-indigo-50 text-indigo-700' 
+                        : 'border-gray-100 bg-gray-50 text-gray-400 hover:border-gray-200'
+                    }`}
+                  >
+                    {v}m
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <>
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg">
+                    Últimas {timeValue} {timeValue === 1 ? "hora" : "horas"}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="1"
+                  max="24"
+                  value={timeValue}
+                  onChange={(e) => setTimeValue(parseInt(e.target.value))}
+                  className="w-full h-2 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                />
+                <div className="flex justify-between mt-2 text-[10px] font-bold text-gray-300 uppercase tracking-widest">
+                  <span>1h</span>
+                  <span>12h</span>
+                  <span>24h</span>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -758,7 +875,7 @@ function ScrapeModal({
             Cancelar
           </button>
           <button
-            onClick={() => onConfirm(site, term, hours)}
+            onClick={() => onConfirm(site, term, timeUnit === 'min' ? timeValue / 60 : timeValue)}
             disabled={!term.trim()}
             className="flex-[2] bg-indigo-600 text-white text-sm font-bold py-3.5 rounded-2xl hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all active:scale-95 disabled:opacity-50 disabled:grayscale"
           >

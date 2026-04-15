@@ -125,6 +125,35 @@ export async function deleteFilteredJobPosts(filters: JobFilters): Promise<void>
   if (error) throw error
 }
 
+export async function ignoreJobPost(job: JobPost, muteCompany: boolean = false): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  // 1. Add to ignored_jobs table
+  const { error: ignoreError } = await supabase
+    .from('ignored_jobs')
+    .upsert({
+      user_id: user.id,
+      external_id: job.externalId || null,
+      company: muteCompany ? job.company : null,
+      reason: 'User muted'
+    }, { onConflict: 'user_id, external_id' });
+
+  if (ignoreError) throw ignoreError;
+
+  // 2. Remove from active job_posts
+  if (muteCompany) {
+    const { error: deleteError } = await supabase
+      .from('job_posts')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('company', job.company);
+    if (deleteError) throw deleteError;
+  } else {
+    await deleteJobPost(job.id);
+  }
+}
+
 // ============================================================
 // Job Matches (panel principal — cuando job_matches esté poblado)
 // ============================================================

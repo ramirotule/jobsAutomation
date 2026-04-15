@@ -18,6 +18,7 @@ const STATUS_ORDER: AppStatus[] = [
   "offer",
   "rejected",
   "ghosted",
+  "ignored",
 ];
 
 const formatAmount = (val: string) => {
@@ -37,6 +38,7 @@ const STATUS_DESCRIPTIONS: Record<AppStatus, string> = {
   offer: "Oferta recibida",
   rejected: "Candidatura rechazada",
   ghosted: "Sin respuesta tras seguimiento",
+  ignored: "Postulación ignorada",
 };
 
 export default function PostulacionDetailPage() {

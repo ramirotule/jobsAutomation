@@ -51,7 +51,8 @@ export default function PostulacionesPage() {
       : filtered.filter(
           (a) =>
             a.title.toLowerCase().includes(search.toLowerCase()) ||
-            a.company.toLowerCase().includes(search.toLowerCase()),
+            a.company.toLowerCase().includes(search.toLowerCase()) ||
+            a.recruiterName?.toLowerCase().includes(search.toLowerCase()),
         );
 
   const visible = [...searched].sort((a, b) => {
@@ -249,7 +250,7 @@ export default function PostulacionesPage() {
             <div className="flex-1 min-w-48 relative">
               <input
                 type="text"
-                placeholder="Buscar por puesto o empresa..."
+                placeholder="Buscar por puesto, empresa o recruiter..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full text-sm border-none focus:ring-0 outline-none placeholder:text-gray-300 pr-10"

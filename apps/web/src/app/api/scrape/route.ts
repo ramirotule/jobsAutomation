@@ -31,23 +31,43 @@ export async function POST(request: Request) {
     const resultString = stdout.substring(stdout.indexOf('{'))
     const result = JSON.parse(resultString)
     
-    // 3. Obtener empresas a las que ya se postuló en la última semana
+    // 3. Obtener empresas a las que ya se postuló en la última semana 
+    // Y también los empleos/empresas marcados como ignorados
     const oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
     
-    const { data: recentApps } = await supabase
-      .from('applications')
-      .select('company')
-      .eq('user_id', user.id)
-      .gte('applied_at', oneWeekAgo.toISOString());
+    const [ { data: recentApps }, { data: ignoredJobs } ] = await Promise.all([
+      supabase
+        .from('applications')
+        .select('company')
+        .eq('user_id', user.id)
+        .gte('applied_at', oneWeekAgo.toISOString()),
+      supabase
+        .from('ignored_jobs')
+        .select('external_id, company')
+        .eq('user_id', user.id)
+    ]);
     
     const excludedCompanies = new Set((recentApps || []).map(a => a.company?.toLowerCase().trim()));
+    const ignoredJobIds = new Set((ignoredJobs || []).map(ij => ij.external_id).filter(Boolean));
+    const ignoredCompanies = new Set((ignoredJobs || []).map(ij => ij.company?.toLowerCase().trim()).filter(Boolean));
 
-    // 4. Guardar las vacantes extraídas filtrando las ya postuladas
+    // 4. Guardar las vacantes extraídas filtrando las ya postuladas e ignoradas
     if (result.data && result.data.length > 0) {
       const filteredJobs = result.data.filter((job: any) => {
         const companyName = job.company?.toLowerCase().trim();
-        return !excludedCompanies.has(companyName);
+        const externalId = job.external_id;
+        
+        // Filtro 1: Ya postulado recientemente
+        if (excludedCompanies.has(companyName)) return false;
+        
+        // Filtro 2: Job ID ignorado específicamente
+        if (externalId && ignoredJobIds.has(externalId)) return false;
+        
+        // Filtro 3: Empresa ignorada completamente
+        if (companyName && ignoredCompanies.has(companyName)) return false;
+
+        return true;
       });
 
       if (filteredJobs.length === 0) {
@@ -64,7 +84,7 @@ export async function POST(request: Request) {
           location: job.location,
           apply_url: job.applyUrl,
           description: job.description,
-          posted_at: new Date().toISOString()
+          posted_at: job.date_posted || new Date().toISOString()
         })), { onConflict: 'user_id, company' })
         
       if (error) {
