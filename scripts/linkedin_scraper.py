@@ -7,20 +7,22 @@ def main():
     try:
         site = sys.argv[1] if len(sys.argv) > 1 else "linkedin"
         search_term = sys.argv[2] if len(sys.argv) > 2 else "frontend developer"
-        hours_old = int(sys.argv[3]) if len(sys.argv) > 3 else 24
+        hours_old = float(sys.argv[3]) if len(sys.argv) > 3 else 24.0
         
         # Determinar qué sitios scrapear
         # Si site es "all", usamos una lista balanceada
         site_names = [site] if site != "all" else ["linkedin", "indeed", "glassdoor"]
         
-        # Scrapear empleos
+        # Scrapear empleos - Asegurar que hours_old sea entero >= 1 para jobspy
+        api_hours_old = max(1, int(round(hours_old)))
+        
         scrape_params = {
             "site_name": site_names,
             "location": "Remote",
             "is_remote": True,
             "job_type": "fulltime",
-            "results_wanted": 15,
-            "hours_old": hours_old,
+            "results_wanted": 50,
+            "hours_old": api_hours_old,
             "country_indeed": 'argentina'
         }
 
@@ -68,7 +70,8 @@ def main():
                     "company": company if company != "nan" else "",
                     "location": location if location != "nan" else "",
                     "applyUrl": url if url != "nan" else "https://linkedin.com/jobs",
-                    "description": description if description != "nan" else ""
+                    "description": description if description != "nan" else "",
+                    "date_posted": str(row.get("date_posted", "")) if pd.notnull(row.get("date_posted")) else None
                 })
 
         # Omitimos print standard y enviamos el JSON final

@@ -130,14 +130,16 @@ export async function ignoreJobPost(job: JobPost, muteCompany: boolean = false):
   if (!user) return;
 
   // 1. Add to ignored_jobs table
+  const conflictTarget = muteCompany ? 'user_id,company' : 'user_id,external_id';
+
   const { error: ignoreError } = await supabase
     .from('ignored_jobs')
     .upsert({
       user_id: user.id,
-      external_id: job.externalId || null,
+      external_id: muteCompany ? null : (job.externalId || job.id),
       company: muteCompany ? job.company : null,
       reason: 'User muted'
-    }, { onConflict: 'user_id, external_id' });
+    }, { onConflict: conflictTarget });
 
   if (ignoreError) throw ignoreError;
 

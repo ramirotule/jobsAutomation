@@ -51,21 +51,24 @@ function NuevaPostulacionContent() {
     recruiterLinkedin: "",
     contactType: "self_initiated" as "self_initiated" | "recruiter_initiated",
     notes: "",
+    jobId: undefined as string | undefined,
   });
 
   useEffect(() => {
     const title = searchParams.get("title");
     const company = searchParams.get("company");
-    const url = searchParams.get("url");
+    const jobId = searchParams.get("job_id");
     const loc = searchParams.get("location");
+    const url = searchParams.get("url");
 
-    if (title || company || url || loc) {
+    if (title || company || url || loc || jobId) {
       setFormData(prev => ({
         ...prev,
         title: title || prev.title,
         company: company || prev.company,
         applyUrl: url || prev.applyUrl,
         location: loc || prev.location,
+        jobId: jobId || prev.jobId,
       }));
     }
   }, [searchParams]);

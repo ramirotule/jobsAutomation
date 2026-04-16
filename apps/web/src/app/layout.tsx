@@ -6,6 +6,7 @@ import { createClient } from "@/utils/supabase/server";
 import { cookies } from "next/headers";
 import LogoutButton from "@/components/auth/LogoutButton";
 import { UtilityToolbar } from "@/components/UtilityToolbar";
+import { SidebarLinks } from "@/components/SidebarLinks";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -15,13 +16,6 @@ export const metadata: Metadata = {
     "Automatizador de búsqueda de empleo para perfiles React / React Native",
 };
 
-const NAV_LINKS = [
-  { href: "/", label: "Dashboard", icon: "📊" },
-  { href: "/vacantes", label: "Vacantes", icon: "🎯" },
-  { href: "/postulaciones", label: "Postulaciones", icon: "🚀" },
-  { href: "/configuracion", label: "Alertas", icon: "🔔" },
-  { href: "/perfil", label: "Perfil", icon: "🧑‍💻" },
-];
 
 export default async function RootLayout({
   children,
@@ -83,18 +77,7 @@ export default async function RootLayout({
               <p className="font-bold text-sm text-indigo-600 truncate">{firstName} {lastName}</p>
             </div>
 
-            <nav className="flex-1 px-3 py-4 space-y-1">
-              {NAV_LINKS.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-200 hover:text-gray-900 transition-colors"
-                >
-                  <span className="text-lg">{link.icon}</span>
-                  {link.label}
-                </Link>
-              ))}
-            </nav>
+            <SidebarLinks />
             
             <div className="px-3 py-4 border-t border-gray-200 space-y-4">
               <LogoutButton />
