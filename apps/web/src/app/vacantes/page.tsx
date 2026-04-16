@@ -42,6 +42,10 @@ export default function VacantesPage() {
   const [scrapeTerm, setScrapeTerm] = useState("");
   const [scrapeHours, setScrapeHours] = useState(24);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [appliedCompanies, setAppliedCompanies] = useState<Record<string, string>>({});
+  const [companySearch, setCompanySearch] = useState("");
+  const [isChecking, setIsChecking] = useState(false);
+
 
   const PAGE_SIZE = 25;
 
@@ -74,7 +78,7 @@ export default function VacantesPage() {
       setJobs((prev) => prev.filter((j) => !selectedIds.has(j.id)));
       setTotal((prev) => prev - selectedIds.size);
       setSelectedIds(new Set());
-      setAlertMsg(`Se han eliminado ${selectedIds.size} vacantes.`);
+      // setAlertMsg(`Se han eliminado ${selectedIds.size} vacantes.`);
     } catch (err: any) {
       setAlertMsg("Error al borrar masivamente: " + err.message);
     } finally {
@@ -103,6 +107,22 @@ export default function VacantesPage() {
 
   useEffect(() => {
     fetchJobs();
+    const fetchHistory = async () => {
+      try {
+        const apps = await getApplications();
+        const companies: Record<string, string> = {};
+        apps.forEach((a) => {
+          const name = a.company.toLowerCase().trim();
+          if (name && !companies[name]) {
+            companies[name] = a.appliedAt;
+          }
+        });
+        setAppliedCompanies(companies);
+      } catch (e) {
+        console.error("Error fetching history:", e);
+      }
+    };
+    fetchHistory();
   }, [fetchJobs]);
 
   const setFilter = (key: keyof JobFilters, value: unknown) => {
@@ -159,11 +179,6 @@ export default function VacantesPage() {
           ? prev.filter((j) => j.company !== job.company)
           : prev.filter((j) => j.id !== job.id),
       );
-      setAlertMsg(
-        muteCompany
-          ? `Se han silenciado todas las vacantes de ${job.company}.`
-          : "Vacante silenciada. No aparecerá en futuras búsquedas.",
-      );
     } catch (err: any) {
       setAlertMsg("Error al silenciar: " + err.message);
     } finally {
@@ -180,7 +195,7 @@ export default function VacantesPage() {
       await deleteAllJobPosts();
       setJobs([]);
       setTotal(0);
-      setAlertMsg("Se han eliminado todas las vacantes del historial.");
+      // setAlertMsg("Se han eliminado todas las vacantes del historial.");
     } catch (err) {
       setAlertMsg(
         "Error al vaciar: " +
@@ -340,7 +355,7 @@ export default function VacantesPage() {
             <div className="flex-1 min-w-48 relative">
               <input
                 type="text"
-                placeholder="Buscar por título o empresa..."
+                placeholder="Buscar vacantes..."
                 value={search}
                 onChange={(e) => {
                   setSearch(e.target.value);
@@ -371,6 +386,52 @@ export default function VacantesPage() {
                     <line x1="6" y1="6" x2="18" y2="18"></line>
                   </svg>
                 </button>
+              )}
+            </div>
+            <div className="flex-1 min-w-48 relative border-l border-gray-100 pl-4">
+              <div className="flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400 shrink-0"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                <input
+                  type="text"
+                  placeholder="Check Historial Empresa..."
+                  value={companySearch}
+                  onChange={(e) => setCompanySearch(e.target.value)}
+                  className="w-full text-sm border-none focus:ring-0 outline-none placeholder:text-gray-300 pr-10"
+                />
+              </div>
+              {companySearch && (
+                <div className="absolute left-0 right-0 top-full mt-2 bg-white border border-gray-100 rounded-xl shadow-xl z-20 p-3 animate-in fade-in slide-in-from-top-1 max-h-60 overflow-y-auto">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">
+                    {Object.keys(appliedCompanies).filter(c => c.includes(companySearch.toLowerCase().trim())).length > 0 
+                      ? "Coincidencias encontradas" 
+                      : "Sin historial previo"}
+                  </p>
+                  <div className="space-y-1">
+                    {Object.keys(appliedCompanies)
+                      .filter(c => c.includes(companySearch.toLowerCase().trim()))
+                      .map((c, i) => (
+                        <div key={i} className="flex items-center justify-between gap-2 text-orange-600 bg-orange-50 p-2 rounded-lg text-xs font-bold border border-orange-100">
+                          <div className="flex flex-col">
+                            <span className="capitalize">{c}</span>
+                            <span className="text-[10px] text-orange-400 font-medium">Última: {new Date(appliedCompanies[c]).toLocaleDateString('es-AR')}</span>
+                          </div>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path></svg>
+                        </div>
+                      ))}
+                    {Object.keys(appliedCompanies).filter(c => c.includes(companySearch.toLowerCase().trim())).length === 0 && (
+                      <div className="flex items-center gap-2 text-green-600 bg-green-50 p-2 rounded-lg text-xs font-bold border border-green-100">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+                        No has postulado aún a "{companySearch}"
+                      </div>
+                    )}
+                  </div>
+                  <button 
+                    onClick={() => setCompanySearch("")} 
+                    className="mt-3 w-full py-1 text-[9px] font-black uppercase text-gray-400 hover:text-gray-600 transition-colors border-t border-gray-50 pt-2"
+                  >
+                    Limpiar
+                  </button>
+                </div>
               )}
             </div>
             <div className="flex items-center gap-1.5 flex-wrap">
@@ -444,6 +505,8 @@ export default function VacantesPage() {
                       onApply={handleApply}
                       onDelete={handleDelete}
                       onIgnore={handleIgnore}
+                      hasHistory={appliedCompanies[job.company?.toLowerCase().trim()] !== undefined}
+                      lastAppliedDate={appliedCompanies[job.company?.toLowerCase().trim()]}
                     />
                   ))}
               </div>
@@ -509,6 +572,8 @@ function JobCard({
   onApply,
   onDelete,
   onIgnore,
+  hasHistory,
+  lastAppliedDate,
 }: {
   job: JobPost;
   isNew: boolean;
@@ -518,9 +583,12 @@ function JobCard({
   onApply: (job: JobPost, e: React.MouseEvent) => void;
   onDelete: (id: string, e: React.MouseEvent) => void;
   onIgnore: (job: JobPost, muteCompany: boolean, e: React.MouseEvent) => void;
+  hasHistory?: boolean;
+  lastAppliedDate?: string;
 }) {
   const router = useRouter();
   const [showMuteMenu, setShowMuteMenu] = useState(false);
+
 
   return (
     <div
@@ -552,8 +620,9 @@ function JobCard({
       </div>
 
       <div
-        onClick={() => router.push(`/vacantes/${job.id}`)}
-        className={`border rounded-2xl p-6 bg-white transition-all flex flex-col gap-3 block h-full cursor-pointer ${
+        // Disabilitado temporalmente por pedido del usuario
+        // onClick={() => router.push(`/vacantes/${job.id}`)}
+        className={`border rounded-2xl p-6 bg-white transition-all flex flex-col gap-3 block h-full ${
           selected
             ? "border-indigo-200 ring-2 ring-indigo-50 shadow-sm"
             : "border-gray-200 hover:border-indigo-200 hover:shadow-md"
@@ -573,6 +642,12 @@ function JobCard({
           <p className="text-gray-400 text-xs mt-1 font-medium italic">
             {job.company}
           </p>
+          {hasHistory && (
+            <div className="mt-2 inline-flex items-center gap-1.5 text-[9px] font-black uppercase bg-orange-100 text-orange-600 px-2 py-1 rounded-md border border-orange-200 animate-in fade-in duration-500">
+              <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path></svg>
+              Ya postulaste {lastAppliedDate && `el ${new Date(lastAppliedDate).toLocaleDateString('es-AR')}`}
+            </div>
+          )}
         </div>
 
         <div className="flex flex-wrap gap-1.5 pl-8">
@@ -612,13 +687,13 @@ function JobCard({
                   window.focus();
                 }
               }}
-              className="flex-1 text-center text-[11px] font-bold py-3 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-all active:scale-95"
+              className="flex-1 text-center text-[11px] font-bold py-3 rounded-xl bg-[#0a66c2] text-white hover:bg-[#004182] transition-all shadow-lg shadow-blue-100 active:scale-95"
             >
               Ver empleo
             </button>
             <button
               onClick={(e) => onApply(job, e)}
-              className="flex-[2] text-[11px] font-bold py-3 rounded-xl bg-gray-900 text-white hover:bg-indigo-600 transition-all shadow-lg shadow-gray-200 active:scale-95"
+              className="flex-1 text-[11px] font-bold py-3 rounded-xl bg-gray-900 text-white hover:bg-indigo-600 transition-all shadow-lg shadow-gray-200 active:scale-95"
             >
               Postular ahora →
             </button>
@@ -670,7 +745,7 @@ function JobCard({
                 }}
                 className="w-full text-left px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors"
               >
-                Silenciar {job.company}
+                Poner en Lista Negra {job.company}
               </button>
             </div>
           )}

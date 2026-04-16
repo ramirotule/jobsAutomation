@@ -59,16 +59,30 @@ export async function scrapeLinkedInDescription(url: string): Promise<string | n
         '.show-more-less-html__markup',
         '.jobs-description__content',
         '.jobs-description-content__text',
-        'article.jobs-description__container'
+        'article.jobs-description__container',
+        '.jobs-box__html-content',
+        '#job-details',
+        '.job-view-layout'
       ];
       
       for (const s of selectors) {
         const el = document.querySelector(s);
-        if (el && el.textContent) {
+        if (el && el.textContent && el.textContent.trim().length > 50) {
           return el.textContent.trim();
         }
       }
-      return null;
+
+      // Fallback: Si no hay selectores específicos, buscar el contenedor más grande con mucho texto
+      const possibleContainers = document.querySelectorAll('div, section, article');
+      let bestContent = '';
+      for (const el of possibleContainers) {
+        const text = el.textContent?.trim() || '';
+        if (text.length > bestContent.length) {
+          bestContent = text;
+        }
+      }
+      
+      return bestContent.length > 100 ? bestContent : null;
     });
 
     return description;

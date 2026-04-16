@@ -121,6 +121,14 @@ export default async function JobDetailPage({
               </div>
             )}
 
+            {/* Description */}
+            <div className="px-6 py-6 border-b border-gray-100">
+              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4">
+                Descripción de la Vacante
+              </h2>
+              <HighlightedDescription text={job.description} />
+            </div>
+
             {/* AI Match Analysis */}
             <div className="px-6 py-5 bg-indigo-50/30 border-t border-indigo-100">
                <AIMatch 

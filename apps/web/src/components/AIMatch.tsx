@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 interface MatchResult {
   score: number;
@@ -10,26 +11,33 @@ interface MatchResult {
 }
 
 export function AIMatch({ jobDescription, jobId }: { jobDescription: string; jobId: string }) {
+  const router = useRouter();
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState<MatchResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const isBadDescription = !jobDescription || jobDescription === "None" || jobDescription === "N/A" || jobDescription.length < 20;
+  const [manualDescription, setManualDescription] = useState("");
+  const [showManual, setShowManual] = useState(false);
 
-  const startAnalysis = async () => {
-    if (isBadDescription) return;
+  const isBadDescription = !jobDescription || jobDescription === "None" || jobDescription === "N/A" || jobDescription.length < 50;
+
+  const startAnalysis = async (customDesc?: string) => {
     setAnalyzing(true);
     setError(null);
     try {
       const response = await fetch("/api/match", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobDescription, jobId }),
+        body: JSON.stringify({ jobDescription: customDesc || jobDescription, jobId }),
       });
 
       const data = await response.json();
       if (data.error) throw new Error(data.error);
       setResult(data);
+      
+      if (isBadDescription || customDesc) {
+        router.refresh();
+      }
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -51,12 +59,46 @@ export function AIMatch({ jobDescription, jobId }: { jobDescription: string; job
             : "Comparamos automáticamente tus skills y CV con esta vacante."}
         </p>
         
-        <button
-          onClick={startAnalysis}
-          className="bg-indigo-600 text-white text-xs font-bold px-6 py-2.5 rounded-xl hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 active:scale-95"
-        >
-          {isBadDescription ? "Obtener descripción y analizar" : "Analizar Compatibilidad"}
-        </button>
+        {!showManual ? (
+          <div className="flex flex-col items-center gap-3">
+            <button
+              onClick={() => startAnalysis()}
+              className="bg-indigo-600 text-white text-xs font-bold px-6 py-2.5 rounded-xl hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 active:scale-95"
+            >
+              {isBadDescription ? "Obtener descripción y analizar" : "Analizar Compatibilidad"}
+            </button>
+            <button
+              onClick={() => setShowManual(true)}
+              className="text-[10px] text-gray-400 font-bold uppercase hover:text-indigo-600 transition-colors"
+            >
+              Pegar descripción manualmente
+            </button>
+          </div>
+        ) : (
+          <div className="w-full space-y-3">
+            <textarea
+              value={manualDescription}
+              onChange={(e) => setManualDescription(e.target.value)}
+              placeholder="Pegá la descripción del empleo aquí..."
+              className="w-full min-h-[120px] text-xs p-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 outline-none"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => startAnalysis(manualDescription)}
+                disabled={manualDescription.length < 50}
+                className="flex-1 bg-indigo-600 text-white text-xs font-bold py-2.5 rounded-xl hover:bg-indigo-700 transition-all disabled:opacity-50"
+              >
+                Analizar Texto Pegado
+              </button>
+              <button
+                onClick={() => setShowManual(false)}
+                className="px-4 py-2.5 text-xs font-bold text-gray-500 hover:bg-gray-100 rounded-xl transition-all"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
         
         {error && <p className="mt-3 text-xs text-red-500 bg-red-50 px-3 py-1.5 rounded-lg">{error}</p>}
       </div>
