@@ -1,21 +1,299 @@
 id,site,job_url,job_url_direct,title,company,location,date_posted,job_type,salary_source,interval,min_amount,max_amount,currency,is_remote,job_level,job_function,listing_type,emails,description,company_industry,company_url,company_logo,company_url_direct,company_addresses,company_num_employees,company_revenue,company_description,skills,experience_range,company_rating,company_reviews_count,vacancy_count,work_from_home_type
-li-4401458869,linkedin,https://www.linkedin.com/jobs/view/4401458869,,Fullstack Developer (Remote - Brazil),Stefanini LATAM,,,,,,,,,True,,,,,,,https://br.linkedin.com/company/stefaninilatam,,,,,,,,,,,,
-li-4399995708,linkedin,https://www.linkedin.com/jobs/view/4399995708,,Frontend Developer (Especialista UI),TIVIT LATAM,,,,,,,,,False,,,,,,,https://co.linkedin.com/company/tivit-latam,,,,,,,,,,,,
-li-4389771944,linkedin,https://www.linkedin.com/jobs/view/4389771944,,"Regional Manager, Customer Success",OutSystems,,,,,,,,,False,,,,,,,https://www.linkedin.com/company/outsystems,,,,,,,,,,,,
-li-4401827072,linkedin,https://www.linkedin.com/jobs/view/4401827072,,Full Stack Engineer  /  Remoto LATAM,Azkait,"Mexico City, Mexico",,,,,,,,False,,,,,,,https://mx.linkedin.com/company/azka-it-consulting,,,,,,,,,,,,
-li-4389838263,linkedin,https://www.linkedin.com/jobs/view/4389838263,,"Full-Stack Engineer, React.JS Focused | LATAM",Deel,,,,,,,,,False,,,,,,,https://www.linkedin.com/company/deel,,,,,,,,,,,,
-li-4400133485,linkedin,https://www.linkedin.com/jobs/view/4400133485,,LATAM - Backend Developer,Playsaurus Inc.,"Alameda, CA",,,,,,,,False,,,,,,,https://www.linkedin.com/company/playsaurus-inc,,,,,,,,,,,,
-li-4389848003,linkedin,https://www.linkedin.com/jobs/view/4389848003,,"Full-Stack Engineer, React.JS Focused | LATAM",Deel,,,,,,,,,False,,,,,,,https://www.linkedin.com/company/deel,,,,,,,,,,,,
-li-4389844115,linkedin,https://www.linkedin.com/jobs/view/4389844115,,"Full-Stack Engineer, React.JS Focused | LATAM",Deel,,,,,,,,,False,,,,,,,https://www.linkedin.com/company/deel,,,,,,,,,,,,
-li-4389846032,linkedin,https://www.linkedin.com/jobs/view/4389846032,,"Full-Stack Engineer, React.JS Focused | LATAM",Deel,,,,,,,,,False,,,,,,,https://www.linkedin.com/company/deel,,,,,,,,,,,,
-li-4389847018,linkedin,https://www.linkedin.com/jobs/view/4389847018,,"Full-Stack Engineer, React.JS Focused | LATAM",Deel,,,,,,,,,False,,,,,,,https://www.linkedin.com/company/deel,,,,,,,,,,,,
-li-4389845098,linkedin,https://www.linkedin.com/jobs/view/4389845098,,"Full-Stack Engineer, React.JS Focused | LATAM",Deel,,,,,,,,,False,,,,,,,https://www.linkedin.com/company/deel,,,,,,,,,,,,
-li-4389848002,linkedin,https://www.linkedin.com/jobs/view/4389848002,,"Full-Stack Engineer, React.JS Focused | LATAM",Deel,,,,,,,,,False,,,,,,,https://www.linkedin.com/company/deel,,,,,,,,,,,,
-li-4389827896,linkedin,https://www.linkedin.com/jobs/view/4389827896,,"Full-Stack Engineer, React.JS Focused | LATAM",Deel,,,,,,,,,False,,,,,,,https://www.linkedin.com/company/deel,,,,,,,,,,,,
-li-4399964726,linkedin,https://www.linkedin.com/jobs/view/4399964726,,Full Stack Engineer,Zartis,,,,,,,,,False,,,,,,,https://ie.linkedin.com/company/zartis,,,,,,,,,,,,
-li-4399998711,linkedin,https://www.linkedin.com/jobs/view/4399998711,,Backend Developer (AWS),TIVIT LATAM,,,,,,,,,False,,,,,,,https://co.linkedin.com/company/tivit-latam,,,,,,,,,,,,
-li-4402547486,linkedin,https://www.linkedin.com/jobs/view/4402547486,,AI & Software Engineer Tech Lead,Nub8 LATAM,"Bogotá, Capital District, Colombia",,,,,,,,False,,,,,,,https://co.linkedin.com/company/nub8latam,,,,,,,,,,,,
-li-4402656062,linkedin,https://www.linkedin.com/jobs/view/4402656062,,Mid-Senior Full-Stack Developer,[DEDICA SOLUCIONES] - Desarrollo e Innovación Tecnológica,,,,,,,,,False,,,,,,,https://mx.linkedin.com/company/dedicamx,,,,,,,,,,,,
-li-4401432810,linkedin,https://www.linkedin.com/jobs/view/4401432810,,Digital Experience Architect,SoftServe,,,,,,,,,False,,,,,,,https://www.linkedin.com/company/softserve,,,,,,,,,,,,
-li-4401427766,linkedin,https://www.linkedin.com/jobs/view/4401427766,,Digital Experience Architect,SoftServe,,,,,,,,,False,,,,,,,https://www.linkedin.com/company/softserve,,,,,,,,,,,,
-li-4401479580,linkedin,https://www.linkedin.com/jobs/view/4401479580,,Applied AI Engineer - Work from home - Talent Conenction,Nortal,,,,,,,,,True,,,,,,,https://ee.linkedin.com/company/nortal,,,,,,,,,,,,
+in-6c3490ec29bafb3a,indeed,https://ar.indeed.com/viewjob?jk=6c3490ec29bafb3a,http://ar.indeed.com/job/desarrollador-frontend-fintech-regulada-cnbv-y-banxico-6c3490ec29bafb3a,Desarrollador Frontend — Fintech regulada (CNBV y Banxico),BEYAPSI SAPI DE CV,"Desde casa, AR",2026-04-27,fulltime,,,,,,False,,,,,"En Yapsi, Fintech mexicana autorizada por la CNBV y Banxico, buscamos integrar a un/a Desarrollador/a Frontend con experiencia en interfaces complejas y escalables, que pueda liderar el diseño, desarrollo y mantenimiento de la experiencia de usuario de nuestros productos digitales, asegurando rendimiento, accesibilidad y consistencia visual.
+
+**Requisitos indispensables:**
+
+* 3 años mínimo de experiencia en desarrollo frontend profesional
+* Experiencia trabajando con apps móviles y **Flutter**
+* **Firebase**
+* Licenciatura en Ingeniería en Sistemas, Ciencias de la Computación o afín
+* Inglés técnico
+
+**Otros:**
+
+* **Atomic Design**
+* Manejo de **Figma**
+* **AWS**
+* Experiencia con HTML, CSS, JavaScript (React o Angular)
+* Webpack, Gulp o herramientas similares
+* Git
+* Pruebas unitarias y de integración
+* Metodologías ágiles (Scrum, Kanban)
+
+**Responsabilidades principales:**
+
+* Construcción de interfaces web modernas, accesibles y eficientes, traduciendo maquetas, prototipos y wireframes en experiencias digitales funcionales.
+* Diseñar y mantener una arquitectura de componentes reutilizables, escalable y consistente, garantizando la mantenibilidad del código.
+* Aplicar técnicas de optimización para mejorar tiempo de carga, renderizado y desempeño general, supervisando pruebas en distintos dispositivos y navegadores.
+* Implementar pruebas unitarias e integradas, realizar revisiones de código y diagnosticar problemas complejos de rendimiento y compatibilidad, proponiendo mejoras en la arquitectura frontend.
+* Implementar medidas de seguridad en el frontend y asegurar el cumplimiento de normativas internas y externas aplicables.
+* Trabajar junto a backend, producto, QA y diseño para asegurar alineación técnica y de negocio, participando activamente en reuniones ágiles, planificación y retrospectivas.
+* Evaluar nuevas tecnologías y herramientas frontend, proponiendo mejoras en procesos, arquitectura y experiencia de usuario.
+
+**Ofrecemos**
+
+* Contratación directa.
+* Estabilidad y desarrollo profesional dentro del sector **Fintech regulado**.
+* Participación directa en una operación financiera regulada y en crecimiento.
+* Sueldo entre $12,000 \- $15,000 MXN.
+
+Tipo de puesto: Tiempo completo
+
+Sueldo: $12\.000,00 \- $15\.000,00 al mes
+
+Pregunta(s) de postulación:
+
+* ¿Tienes experiencia desarrollando con Flutter?
+* ¿Cuántos años de experiencia tienes desarrollando aplicaciones móviles?
+* ¿Has trabajado con Firebase en proyectos productivos (no solo tutoriales o cursos)?
+* ¿Tienes experiencia trabajando con servicios de AWS?
+
+Lugar de trabajo: Empleo remoto",,https://ar.indeed.com/cmp/Beyapsi-Sapi-De-Cv,,,,,,,,,,,,
+in-1338826a59eb3593,indeed,https://ar.indeed.com/viewjob?jk=1338826a59eb3593,http://ar.indeed.com/job/desarrollador-backend-fintech-regulada-cnbv-y-banxico-1338826a59eb3593,Desarrollador Backend — Fintech regulada (CNBV y Banxico),BEYAPSI SAPI DE CV,"Desde casa, AR",2026-04-27,fulltime,,,,,,False,,,,,"En Yapsi, Fintech mexicana autorizada por la CNBV y Banxico, buscamos integrar a un/a Desarrollador/a Backend con experiencia en sistemas escalables y arquitectura de microservicios, que pueda diseñar, desarrollar y mantener los servicios que sostienen nuestra operación financiera, asegurando la integridad, disponibilidad y seguridad de los datos.
+
+**Requisitos indispensables:**
+
+* 3 años mínimo de experiencia en desarrollo backend profesional
+* Experiencia trabajando con apps móviles y **Flutter**
+* **Firebase**
+* **AWS**
+* Experiencia comprobable en **arquitectura de microservicios**
+* Licenciatura en Ingeniería en Sistemas, Ciencias de la Computación o afín
+* Inglés técnico
+
+**Otros:**
+
+* JavaScript / Node.js
+* PostgreSQL
+* Dockers
+* Experiencia en metodologías ágiles (Scrum, Kanban)
+* Experiencia previa en fintech o entornos regulados
+
+**Responsabilidades principales:**
+
+* Diseñar arquitecturas de sistemas backend escalables y eficientes, así como implementar y mantener APIs RESTful y servicios backend complejos.
+* Diseñar, implementar y optimizar esquemas de bases de datos relacionales y no relacionales, asegurando integridad, disponibilidad y rendimiento.
+* Implementar medidas de seguridad en las aplicaciones backend para proteger los datos y la infraestructura, asegurando el cumplimiento normativo aplicable.
+* Trabajar de cerca con equipos frontend, producto y QA para alinear las soluciones técnicas con los requisitos del negocio, participando activamente en planificación y revisiones de código.
+* Evaluar y adoptar nuevas tecnologías y herramientas para mejorar la eficiencia y calidad del desarrollo, proponiendo mejoras continuas en la arquitectura y los procesos.
+* Realizar pruebas de depuración, automatización y despliegue.
+
+**Ofrecemos**
+
+* Contratación directa.
+* Estabilidad y desarrollo profesional dentro del sector **Fintech regulado**.
+* Participación directa en una operación financiera regulada y en crecimiento.
+* Sueldo entre $12,000 \- $15,000 MXN.
+
+Tipo de puesto: Tiempo completo
+
+Sueldo: $12\.000,00 \- $15\.000,00 al mes
+
+Pregunta(s) de postulación:
+
+* ¿Tienes experiencia desarrollando con Flutter?
+* ¿Cuántos años de experiencia tienes desarrollando aplicaciones móviles?
+* ¿Has trabajado con Firebase en proyectos productivos (no solo tutoriales o cursos)?
+* ¿Tienes experiencia desarrollando servicios backend sobre AWS?
+* ¿Has diseñado o trabajado con arquitectura de microservicios en producción?
+
+Lugar de trabajo: Empleo remoto",,https://ar.indeed.com/cmp/Beyapsi-Sapi-De-Cv,,,,,,,,,,,,
+in-4132c5a304a2754a,indeed,https://ar.indeed.com/viewjob?jk=4132c5a304a2754a,https://people.revolut.com/public/careers/position/0e0b0a42-c42b-49a2-9a93-18e8041f1e70?source=Indeed,FinCrime Risk Manager (AML),Revolut,"Desde casa, AR",2026-04-27,fulltime,,,,,,True,,,,,"**About Revolut**
+People deserve more from their money. More visibility, more control, and more freedom. Since 2015, Revolut has been on a mission to deliver just that. Our powerhouse of products — including spending, saving, investing, exchanging, travelling, and more — help our 70\+ million customers get more from their money every day.
+
+
+As we continue our lightning\-fast growth,‌ 2 things are essential to our success: our people and our culture. In recognition of our outstanding employee experience, we've been certified as a Great Place to Work™. So far, we have 13,000\+ people working around the world, from our offices and remotely, to help us achieve our mission. And we're looking for more brilliant people. People who love building great products, redefining success, and turning the complexity of a chaotic world into the simplicity of a beautiful solution.
+
+**About the role**
+Our Financial Crime team blends regulatory expertise with data\-driven thinking to make sure our products meet legal and policy requirements and deliver real value to customers. In a fast\-moving, digital environment, they stay one step ahead by finding smart, scalable ways to prevent financial crime.
+
+
+We’re looking for a FinCrime Manager to support our AML efforts across multiple product lines and markets. You'll bring your first\-line experience in anti\-money laundering to provide advisory, control testing, and guidance to teams across Product, Operations, and Compliance.
+
+
+Up to shape what's next in finance? Let's get in touch.
+
+**What you'll be doing*** Designing and implementing robust AML controls aligned with regulatory requirements and scalable across global markets
+* Providing AML advisory on new products, jurisdictions, and features, ensuring risks are understood and mitigated early
+* Supporting audit and regulatory engagements through clear articulation of Revolut’s control frameworks
+* Performing control testing and QA to validate the design and operating effectiveness of key AML controls
+* Partnering with Product, Operations, and Compliance teams to ensure AML controls are effective, measurable, and customer\-centric
+* Enhancing customer outcomes by identifying control issues that may cause detriment (e.g., inappropriate off\-boarding or transaction blocks), and recommending improvements
+* Maintaining AML MI dashboards and documentation to support internal governance and external transparency
+
+**What you'll need*** 5\+ years of experience as an anti\-money laundering SME in a risk advisory or control team within the first line of defence
+* A solid track record of AML advisory across both retail and business banking or fintech products
+* In\-depth knowledge of AML typologies, regulatory requirements, and control frameworks
+* Experience conducting risk assessments, identifying control gaps, and driving remediation
+* An understanding of modern financial products, including crypto and investment products, and their associated risks
+* A proactive and pragmatic mindset
+* Great communication skills and the ability to engage stakeholders across departments
+
+**Nice to have*** Familiarity with transaction monitoring, rule logic, or model tuning
+
+*Building a global financial super app isn’t enough. Our Revoluters are a priority, and that’s why in 2021 we launched our inaugural D\&I Framework, designed to help us thrive and grow everyday. We're not just doing this because it's the right thing to do. We’re doing it because we know that seeking out diverse talent and creating an inclusive workplace is the way to create exceptional, innovative products and services for our customers. That’s why we encourage applications from people with diverse backgrounds and experiences to join this multicultural, hard\-working team.*
+
+***Important notice for candidates:***
+
+*Job scams are on the rise. Please keep these guidelines in mind when applying for any open roles.*
+
+* ***Only apply through official Revolut channels.*** *We don’t use any third\-party services or platforms for our recruitment.*
+* ***Always double\-check the emails you receive.*** *Make sure all communications are being done through official Revolut emails, with an @revolut.com domain.*
+
+***We won't ask for payment or personal financial information during the hiring process.*** *If anyone does ask you for this, it’s a scam. Report it immediately.*
+
+*By submitting this application, I confirm that all the information given by me in this application for employment and any additional documents attached hereto are true to the best of my knowledge and that I have not wilfully suppressed any material fact. I confirm I have disclosed if applicable any previous employment with Revolut. I accept that if any of the information given by me in this application is in any way false or incorrect, my application may be rejected, any offer of employment may be withdrawn or my employment with Revolut may be terminated summarily or I may be dismissed. By submitting this application, I agree that my personal data will be processed in accordance with Revolut's* *Candidate Privacy Notice*
+
+
+Notice: This is a remote position based in Argentina.",,https://ar.indeed.com/cmp/Revolut,https://d2q79iu7y748jz.cloudfront.net/s/_squarelogo/256x256/a060bf3d4f32a090395c9c81a1b616cd,https://www.revolut.com,"London, England","10,000+",Decline to state,We change the way you do money.,,,,,,
+in-0b1e34a9988ce896,indeed,https://ar.indeed.com/viewjob?jk=0b1e34a9988ce896,https://grnh.se/s3y9ye0k3us,Junior Marketing Analyst - Comms,Sezzle,"Desde casa, AR",2026-04-27,,,,,,,True,,,,,"**About Sezzle:**
+
+
+
+With a mission to financially empower the next generation, Sezzle is revolutionizing the shopping experience beyond payments, blending cutting\-edge tech with seamless, interest\-free installment plans that make shopping smarter and more accessible. We're not just transforming payments; we're redefining how people discover, interact with, and purchase the things they love while driving real impact on merchant sales through increased conversions and higher order values. As we continue to shape the future of fintech and retail, we're building an innovative, dynamic team passionate about creating more than just a transaction but a truly unique shopping journey. If you're excited about pushing boundaries in tech and delivering a game\-changing experience for consumers and merchants alike, come join us at Sezzle and help create the future of shopping!
+
+
+**About the Role:**
+
+
+
+We are seeking a talented and motivated Marketing Analyst\- Commswho is best in class, with a high IQ and a high EQ. This role presents an exciting opportunity to thrive in a dynamic, fast\-paced environment within a rapidly growing team, with strong prospects for continued growth and increased ownership.
+
+
+
+The Marketing Analyst \- Comms, will sit at the intersection of data, CRM strategy, and AI\-driven efficiency. We're looking for an execution\-oriented person who owns their work from end\-to\-end. You'll dive into the details of how our campaigns operate across email, push, SMS, and in\-app channels, spot friction and inefficiency, and design smarter ways forward. You'll spend most of your time inside Braze, Sezzle's primary consumer\-focused CRM and marketing automation platform, building and analyzing campaigns across email, push, SMS, and in\-app channels. You'll dig into performance data to identify what's working, surface gaps in our consumer journeys, and develop new comms to fill them. You'll also look for every opportunity to apply AI tools to make the team's output faster, sharper, and more scalable.  
+
+This isn't a role where you wait for assignments. We want someone who can look at a set of data, identify the opportunity, and start building toward it then communicate what they found and why it matters to the team around them.
+
+
+**What You'll Do:**
+
+
+* **CRM Campaign Execution \& Analysis**
+
+
+	+ Build, launch, and iterate on campaigns and canvases in Braze across email, push, SMS, and in\-app channels.
+	+ Audit existing consumer journeys to identify engagement gaps, drop\-off points, and missed messaging opportunities.
+	+ Develop segmentation strategies and personalized comms that improve activation, engagement, and retention.
+	+ Support A/B test design, execution, and readout — translating results into clear, actionable recommendations.
+	+ Maintain performance dashboards and reporting frameworks that make campaign data interpretable for the broader marketing team.
+	+ Track KPIs including DAU, ARPDAU, LTV per user, open rates, click rates, and conversion, and surface insights tied to those metrics.
+	+ Effectively manage our marketing CRM tool to drive new and innovative use cases that can be shared across the team
+	+ Write SQL queries to investigate issues and campaign results using internal data**AI, Automation \& Process Optimization**
+
+
+	+ Identify opportunities to apply AI tools and automation across marketing workflows from copy generation to campaign QA to performance analysis.
+	+ Build and iterate on tools, templates, and agents that reduce manual effort and improve output consistency.
+	+ Stay current on emerging AI/automation capabilities and bring concrete recommendations for how they can be applied within Sezzle's marketing stack.**Cross\-Functional Collaboration**
+
+
+	+ Partner with marketing, product, data, and engineering teams to align on tooling decisions and ensure smooth implementation.
+	+ Serve as a connector between technical teams and marketing stakeholders, translating requirements in both directions.
+	+ Facilitate adoption of new tools and workflows by developing documentation, training materials, and hands\-on support for team members.
+	+ Identify and flag integration risks early; bring concrete mitigation recommendations.
+
+**What We Look for:**
+
+
+* **Skills \& Competencies**
+
+
+	+ Hands\-on experience building or implementing AI tools, agents, and automation in a professional setting.
+	+ Strong analytical skills, comfortable working with data, running queries, and presenting findings with context.
+	+ Experience in consumer marketing operations, CRM platforms (Braze or similar), or marketing technology stacks; Braze experience is a plus.
+	+ Ability to identify process inefficiencies and develop structured, scalable solutions.
+	+ Excellent written and verbal communication skills, and you can explain technical concepts clearly to non\-technical teammates.
+	+ Basic project management skills; organized, proactive, and reliable with deadlines.
+	+ Experience with segmentation, A/B testing, and performance reporting.
+	+ Strong experience in data visualization tools and SQL.
+	+ Ability to prioritize and manage multiple tasks simultaneously**Educational \& Professional Experience**
+
+
+	+ Background in computer science, analytics, engineering, AI, and/or related fields.
+	+ Exposure to business, marketing, finance, or other related fields
+	+ Previous internships or academic projects involving campaign management, marketing analytics, and content creation preferred.
+	+ Professional, academic or personal projects that demonstrate an ability to creatively use AI to create efficiencies.
+
+**Preferred Qualifications:**
+
+
+* Experience building AI\-first platforms or internal products from scratch, including early architectural decisions.
+* Strong foundation in core machine learning and data science principles, including supervised/unsupervised learning, feature engineering, model evaluation, and statistical inference.
+* Experience with transformer architectures (BERT, GPT, etc.) and understanding of attention mechanisms, tokenization, and fine\-tuning strategies for domain\-specific applications.
+* Experience developing AI\-assisted or agentic systems that interact with tools, data, or workflows.
+* Familiarity with embeddings and vector representations, including text embeddings, similarity search, and integration with vector databases (Pinecone, Weaviate, pgvector, or similar).
+* Experience with NLP techniques including text classification, named entity recognition, semantic search, and information extraction.
+* Familiarity with cloud\-native development using AWS.
+* Understanding of prompt engineering, retrieval\-augmented generation (RAG), and LLM application patterns.
+* Experience with containerized systems and orchestration tools such as Docker and Kubernetes.
+* Exposure to CI/CD pipelines and modern development workflows (e.g., GitLab).
+* Experience with Golang is a plus (or willingness to learn).
+* Experience with Braze or similar consumer facing CRM platforms and/or various B2C digital marketing channels like affiliate, CTV, paid social, paid search, GEO/SEO, DSP.
+
+**About You:**
+
+
+* **You have relentlessly high standards** \- many people may think your standards are unreasonably high. You are continually raising the bar and driving those around you to deliver great results. You make sure that defects do not get sent down the line and that problems are fixed so they stay fixed.
+* **You're not bound by convention** \- your success—and much of the fun—lies in developing new ways to do things
+* **You need action** \- speed matters in business. Many decisions and actions are reversible and do not need extensive study. We value calculated risk\-taking.
+* **You earn trust** \- you listen attentively, speak candidly, and treat others respectfully.
+
+**What Makes Working at Sezzle Awesome:**
+
+
+
+At Sezzle, we are more than just brilliant engineers, passionate data enthusiasts, out\-of\-the\-box thinkers, and determined innovators. We believe in surrounding ourselves with only the best and the brightest individuals. Our culture is not defined by a certain set of perks designed to give the illusion of the traditional startup culture, but rather, it is the visible example living in every employee that we hire.
+
+
+
+\#Li\-remote \#full\-time",,https://ar.indeed.com/cmp/Sezzle,https://d2q79iu7y748jz.cloudfront.net/s/_squarelogo/256x256/79b41d12c8d0bdfaede192c8060ae7fb,,,,,,,,,,,
+li-4406292349,linkedin,https://www.linkedin.com/jobs/view/4406292349,,SR. QA/QC ENGINEER,QatarEnergy,"Doha, Doha, Qatar",,,,,,,,False,,,,,,,https://qa.linkedin.com/company/qatarenergy,,,,,,,,,,,,
+li-4362339582,linkedin,https://www.linkedin.com/jobs/view/4362339582,,QA Engineer II,Acorns,,,,,,,,,False,,,,,,,https://www.linkedin.com/company/acorns-grow-inc-,,,,,,,,,,,,
+li-4405148877,linkedin,https://www.linkedin.com/jobs/view/4405148877,,Junior QA Tester – Clinical Data Services,"Persistent Technology, Inc.","Myrtle Point, OR",,,,,,,,False,,,,,,,https://www.linkedin.com/company/persistent-technology,,,,,,,,,,,,
+li-4406221050,linkedin,https://www.linkedin.com/jobs/view/4406221050,,Quality Assurance Tester (2 hours/week),Kuudra,"Addis Ababa, Ethiopia",,,,,,,,False,,,,,,,https://www.linkedin.com/company/kuudra,,,,,,,,,,,,
+li-4407536516,linkedin,https://www.linkedin.com/jobs/view/4407536516,,Quality Assurance Analyst,Made4net,,,,,,,,,False,,,,,,,https://www.linkedin.com/company/made4net,,,,,,,,,,,,
+li-4407807453,linkedin,https://www.linkedin.com/jobs/view/4407807453,,Product Quality Specialist,Yaqeen Institute,,,,,,,,,False,,,,,,,https://www.linkedin.com/company/yaqeen-institute,,,,,,,,,,,,
+li-4405534384,linkedin,https://www.linkedin.com/jobs/view/4405534384,,Analista de Testes / QA Sênior (Operações),Omie,,,,,,,,,False,,,,,,,https://br.linkedin.com/company/omie,,,,,,,,,,,,
+li-4407826332,linkedin,https://www.linkedin.com/jobs/view/4407826332,,Strong Junior QA Manual Engineer,NineTwoThree AI Studio,,,,,,,,,False,,,,,,,https://www.linkedin.com/company/ninetwothree,,,,,,,,,,,,
+li-4407597517,linkedin,https://www.linkedin.com/jobs/view/4407597517,,Product Quality Specialist,Yaqeen Institute,,,,,,,,,False,,,,,,,https://www.linkedin.com/company/yaqeen-institute,,,,,,,,,,,,
+li-4407820491,linkedin,https://www.linkedin.com/jobs/view/4407820491,,QA Analyst,Sundayy,,,,,,,,,False,,,,,,,https://www.linkedin.com/company/sundayyglobal,,,,,,,,,,,,
+li-4407833292,linkedin,https://www.linkedin.com/jobs/view/4407833292,,Unsolicited (spontaneous) application,LanguageWire,"Copenhagen, Capital Region of Denmark, Denmark",,,,,,,,False,,,,,,,https://dk.linkedin.com/company/languagewire,,,,,,,,,,,,
+li-4406204773,linkedin,https://www.linkedin.com/jobs/view/4406204773,,Quality Assurance Specialist Corporate,Revelation Pharma,,,,,,,,,False,,,,,,,https://www.linkedin.com/company/revelationpharma,,,,,,,,,,,,
+li-4407429064,linkedin,https://www.linkedin.com/jobs/view/4407429064,,QA Engineer - Manual,OAK'S LAB,,,,,,,,,False,,,,,,,https://cz.linkedin.com/company/oakslab,,,,,,,,,,,,
+li-4407406431,linkedin,https://www.linkedin.com/jobs/view/4407406431,,QA Analyst,Embrace Software Inc,,,,,,,,,False,,,,,,,https://www.linkedin.com/company/embrace-software-inc,,,,,,,,,,,,
+li-4407108479,linkedin,https://www.linkedin.com/jobs/view/4407108479,,Content QA Specialist,Ciklum,,,,,,,,,False,,,,,,,https://uk.linkedin.com/company/ciklum,,,,,,,,,,,,
+li-4407494067,linkedin,https://www.linkedin.com/jobs/view/4407494067,,Senior QA Engineer,Angel,"Provo, UT",,,,,,,,False,,,,,,,https://www.linkedin.com/company/angel-studios-page,,,,,,,,,,,,
+li-4407416938,linkedin,https://www.linkedin.com/jobs/view/4407416938,,QA Engineer - Manual,OAK'S LAB,,,,,,,,,False,,,,,,,https://cz.linkedin.com/company/oakslab,,,,,,,,,,,,
+li-4407412985,linkedin,https://www.linkedin.com/jobs/view/4407412985,,QA Engineer - Manual,OAK'S LAB,,,,,,,,,False,,,,,,,https://cz.linkedin.com/company/oakslab,,,,,,,,,,,,
+li-4407597628,linkedin,https://www.linkedin.com/jobs/view/4407597628,,Software Verification & QA Specialist,Codekeeper,,,,,,,,,False,,,,,,,https://www.linkedin.com/company/codekeeper,,,,,,,,,,,,
+li-4407417924,linkedin,https://www.linkedin.com/jobs/view/4407417924,,QA Engineer - Manual,OAK'S LAB,,,,,,,,,False,,,,,,,https://cz.linkedin.com/company/oakslab,,,,,,,,,,,,
+li-4407843159,linkedin,https://www.linkedin.com/jobs/view/4407843159,,Software Quality Engineer,Helic & Co.,,,,,,,,,False,,,,,,,https://ca.linkedin.com/company/helicco,,,,,,,,,,,,
+li-4406505214,linkedin,https://www.linkedin.com/jobs/view/4406505214,,Quality Assurance Tester,RemoteHunter,,,,,,,,,False,,,,,,,https://www.linkedin.com/company/remotehunter,,,,,,,,,,,,
+li-4398030010,linkedin,https://www.linkedin.com/jobs/view/4398030010,,Quality Assurance Leader (Eastern & Southern Europe),GE HealthCare,"Budapest, Budapest, Hungary",,,,,,,,False,,,,,,,https://www.linkedin.com/company/gehealthcare,,,,,,,,,,,,
+li-4406294175,linkedin,https://www.linkedin.com/jobs/view/4406294175,,Senior Quality Assurance Engineer,Berkeley Payments,,,,,,,,,False,,,,,,,https://ca.linkedin.com/company/berkeley-payment-solutions,,,,,,,,,,,,
+li-4406284606,linkedin,https://www.linkedin.com/jobs/view/4406284606,,Test- und Qualitätsmanager (m/w/d),Spot Solutions GmbH,"Mühltal, Hesse, Germany",,,,,,,,False,,,,,,,https://de.linkedin.com/company/spot-solutions-gmbh,,,,,,,,,,,,
+li-4407436459,linkedin,https://www.linkedin.com/jobs/view/4407436459,,Senior QA Analyst (Remote),M3 USA,,,,,,,,,True,,,,,,,https://www.linkedin.com/company/so-net-m3,,,,,,,,,,,,
+li-4407821244,linkedin,https://www.linkedin.com/jobs/view/4407821244,,Quality Assurance (QA) Engineer - OVO Drive,OVO,,,,,,,,,False,,,,,,,https://uk.linkedin.com/company/ovoenergy,,,,,,,,,,,,
+li-4407413254,linkedin,https://www.linkedin.com/jobs/view/4407413254,,QA Lead [US Shift],Tuna Software Solutions Pvt Ltd,,,,,,,,,False,,,,,,,https://in.linkedin.com/company/tuna-software-solutions,,,,,,,,,,,,
+li-4407543767,linkedin,https://www.linkedin.com/jobs/view/4407543767,,QA Engineer (Functional Testing),Koombea,,,,,,,,,False,,,,,,,https://www.linkedin.com/company/koombea,,,,,,,,,,,,
+li-4405121196,linkedin,https://www.linkedin.com/jobs/view/4405121196,,QA Engineer,xpate,,,,,,,,,False,,,,,,,https://uk.linkedin.com/company/xpate,,,,,,,,,,,,
+li-4405992644,linkedin,https://www.linkedin.com/jobs/view/4405992644,,Quality Assurance Engineer - Remote Work,BairesDev,,,,,,,,,True,,,,,,,https://www.linkedin.com/company/bairesdev,,,,,,,,,,,,
+li-4405119785,linkedin,https://www.linkedin.com/jobs/view/4405119785,,QA Engineer (AI-Driven Testing),Smart Consulting,,,,,,,,,False,,,,,,,https://pt.linkedin.com/company/thesmartwaytodoit,,,,,,,,,,,,
+li-4405996631,linkedin,https://www.linkedin.com/jobs/view/4405996631,,Manual QA / R + D - Trabalho Remoto,BairesDev,,,,,,,,,False,,,,,,,https://www.linkedin.com/company/bairesdev,,,,,,,,,,,,
+li-4394431613,linkedin,https://www.linkedin.com/jobs/view/4394431613,,QA Engineer,DXC Technology,"Ho Chi Minh City, Vietnam",,,,,,,,False,,,,,,,https://www.linkedin.com/company/dxctechnology,,,,,,,,,,,,
+li-4405997554,linkedin,https://www.linkedin.com/jobs/view/4405997554,,Quality Assurance Engineer,Fountain,,,,,,,,,False,,,,,,,https://www.linkedin.com/company/fountaininc,,,,,,,,,,,,
+li-4405114199,linkedin,https://www.linkedin.com/jobs/view/4405114199,,QA Engineer,Squash Apps,,,,,,,,,False,,,,,,,https://www.linkedin.com/company/squash-apps,,,,,,,,,,,,
+li-4405155952,linkedin,https://www.linkedin.com/jobs/view/4405155952,,QA Automation Engineer,Air Apps,"Dublin, County Dublin, Ireland",,,,,,,,False,,,,,,,https://www.linkedin.com/company/airapps,,,,,,,,,,,,
+li-4407827071,linkedin,https://www.linkedin.com/jobs/view/4407827071,,Automation QA Engineer | Senior | Saily | Apps,Nord Security,"Wrocław, Dolnośląskie, Poland",,,,,,,,False,,,,,,,https://www.linkedin.com/company/nordsecurity,,,,,,,,,,,,
+li-4406234588,linkedin,https://www.linkedin.com/jobs/view/4406234588,,Software QA Engineer L4,"Frontdoor, Inc.",,,,,,,,,False,,,,,,,https://www.linkedin.com/company/frontdoor-inc,,,,,,,,,,,,
+li-4405105979,linkedin,https://www.linkedin.com/jobs/view/4405105979,,Quality Assurance Pharma,Amaris Consulting,,,,,,,,,False,,,,,,,https://ch.linkedin.com/company/amarisconsulting,,,,,,,,,,,,
+li-4385685683,linkedin,https://www.linkedin.com/jobs/view/4385685683,,QA Automation Lead,Apryse,,,,,,,,,False,,,,,,,https://www.linkedin.com/company/aprysesolutions,,,,,,,,,,,,
+li-4230858050,linkedin,https://www.linkedin.com/jobs/view/4230858050,,QA Automation Engineer,TELUS Digital,,,,,,,,,False,,,,,,,https://ca.linkedin.com/company/telus-digital,,,,,,,,,,,,
+li-4406202139,linkedin,https://www.linkedin.com/jobs/view/4406202139,,"Data Quality Associate, AI Labeling",eDataBae,,,,,,,,,False,,,,,,,https://in.linkedin.com/company/edatabae,,,,,,,,,,,,
+li-4406523802,linkedin,https://www.linkedin.com/jobs/view/4406523802,,QC Coordinator (Europe/America based),Welocalize,,,,,,,,,False,,,,,,,https://www.linkedin.com/company/welocalize,,,,,,,,,,,,
+li-4406225292,linkedin,https://www.linkedin.com/jobs/view/4406225292,,"QA Tester | Quality Assurance | VR Gaming / Simulation | Remote options (Dallas is Ideal) | $60,000 - $80,000 USD + Benefits",White Bay,"Dallas, TX",,,,,,,,True,,,,,,,https://au.linkedin.com/company/whitebay,,,,,,,,,,,,
+li-4405123656,linkedin,https://www.linkedin.com/jobs/view/4405123656,,Analista QA Automatizador,Claire Joster,,,,,,,,,False,,,,,,,https://es.linkedin.com/company/claire-joster,,,,,,,,,,,,
+li-4407531765,linkedin,https://www.linkedin.com/jobs/view/4407531765,,QA Engineer (Functional Testing),Koombea,,,,,,,,,False,,,,,,,https://www.linkedin.com/company/koombea,,,,,,,,,,,,
+li-4407538809,linkedin,https://www.linkedin.com/jobs/view/4407538809,,QA Engineer (Functional Testing),Koombea,,,,,,,,,False,,,,,,,https://www.linkedin.com/company/koombea,,,,,,,,,,,,
+li-4406210463,linkedin,https://www.linkedin.com/jobs/view/4406210463,,Platform QA Engineer (.NET apps),Paramo Technologies,,,,,,,,,False,,,,,,,https://ar.linkedin.com/company/paramo-technologies,,,,,,,,,,,,
+li-4407464926,linkedin,https://www.linkedin.com/jobs/view/4407464926,,Senior Quality Assurance Engineer,LatAm Hire,,,,,,,,,False,,,,,,,https://ec.linkedin.com/company/wearelatamhire,,,,,,,,,,,,

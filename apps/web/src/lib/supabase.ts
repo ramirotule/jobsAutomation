@@ -35,6 +35,8 @@ function mapJobPost(row: any): JobPost {
     requiredSkills:   row.required_skills ?? [],
     niceToHaveSkills: row.nice_to_have_skills ?? [],
     applyUrl:         row.apply_url ?? '',
+    matchScore:       row.match_score ?? null,
+    matchResult:      row.match_result ?? null,
     postedAt:         row.posted_at ?? '',
     isActive:         row.is_active ?? true,
     createdAt:        row.created_at ?? '',

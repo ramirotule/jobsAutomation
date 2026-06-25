@@ -15,6 +15,7 @@ const NAV_LINKS: NavLink[] = [
   { href: "/postulaciones", label: "Postulaciones", icon: "🚀" },
   { href: "/configuracion", label: "Alertas", icon: "🔔" },
   { href: "/perfil", label: "Perfil", icon: "🧑‍💻" },
+  { href: "/linkedin-test", label: "Prueba Apify", icon: "🔗" },
 ];
 
 export function SidebarLinks() {

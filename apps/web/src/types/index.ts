@@ -94,6 +94,14 @@ export interface JobPost {
   postedAt: string
   isActive: boolean
   createdAt: string
+  // AI match scoring
+  matchScore?: number | null
+  matchResult?: {
+    score: number
+    pros: string[]
+    cons: string[]
+    recommendation: string
+  } | null
   // Social media publications tracking
   socialMediaId?: Record<string, string> // e.g. { instagram: 'id123', facebook: 'id456' }
   lastSocialMediaPostedAt?: string

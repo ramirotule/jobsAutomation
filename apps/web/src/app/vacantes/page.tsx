@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -16,10 +16,11 @@ import type { JobPost, JobFilters } from "@/types";
 
 const TODAY = new Date().toISOString().split("T")[0];
 
-type SortOption = "newest" | "oldest";
+type SortOption = "newest" | "oldest" | "best_match";
 const SORT_LABELS: Record<SortOption, string> = {
   newest: "Más reciente",
   oldest: "Más antiguo",
+  best_match: "Best match",
 };
 
 export default function VacantesPage() {
@@ -38,14 +39,15 @@ export default function VacantesPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [alertMsg, setAlertMsg] = useState<string | null>(null);
-  const [showScrapeModal, setShowScrapeModal] = useState(false);
-  const [scrapeTerm, setScrapeTerm] = useState("");
-  const [scrapeHours, setScrapeHours] = useState(24);
+  const [showSearchModal, setShowSearchModal] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [appliedCompanies, setAppliedCompanies] = useState<Record<string, string>>({});
   const [companySearch, setCompanySearch] = useState("");
   const [isChecking, setIsChecking] = useState(false);
-
+  const [tailoring, setTailoring] = useState<string | null>(null);
+  const [tailorResult, setTailorResult] = useState<any>(null);
+  const [batchProgress, setBatchProgress] = useState<{ total: number; processed: number; isComplete: boolean } | null>(null);
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
   const PAGE_SIZE = 25;
 
@@ -206,6 +208,76 @@ export default function VacantesPage() {
     }
   };
 
+  const stopBatch = useCallback(() => {
+    pollingRef.current = null;
+    setBatchProgress(null);
+  }, []);
+
+  const processNextJob = useCallback(async (total: number, processed: number) => {
+    // Check if cancelled
+    if (!pollingRef.current) return;
+
+    try {
+      const res = await fetch("/api/match/batch", { method: "POST" });
+
+      if (res.status === 429) {
+        // Rate limited — wait and retry
+        setBatchProgress((prev) => prev ? { ...prev, total, processed } : null);
+        setTimeout(() => processNextJob(total, processed), 60000);
+        return;
+      }
+
+      const data = await res.json();
+
+      if (data.error) {
+        console.error("Batch error:", data.error);
+        stopBatch();
+        return;
+      }
+
+      if (data.isComplete) {
+        stopBatch();
+        await fetchJobs();
+        return;
+      }
+
+      const newProcessed = processed + 1;
+      const newTotal = newProcessed + (data.remaining || 0);
+      setBatchProgress({ total: newTotal, processed: newProcessed, isComplete: false });
+
+      // Refresh job list periodically (every 3 processed jobs)
+      if (newProcessed % 3 === 0) {
+        await fetchJobs();
+      }
+
+      // Process next job after a short delay (rate limit: 4s between Gemini calls)
+      setTimeout(() => processNextJob(newTotal, newProcessed), data.score === -1 ? 200 : 4500);
+    } catch (err) {
+      console.error("Batch match error:", err);
+      stopBatch();
+    }
+  }, [fetchJobs, stopBatch]);
+
+  const triggerBatchMatch = useCallback(async () => {
+    // First call to get the initial count
+    try {
+      const res = await fetch("/api/match/batch", { method: "POST" });
+      const data = await res.json();
+
+      if (data.isComplete || data.remaining === 0) return;
+
+      const total = (data.remaining || 0) + 1;
+      pollingRef.current = {} as any; // flag as active
+      setBatchProgress({ total, processed: data.score != null ? 1 : 0, isComplete: false });
+
+      // Start processing chain
+      const delay = data.score === -1 ? 200 : 4500;
+      setTimeout(() => processNextJob(total, data.score != null ? 1 : 0), delay);
+    } catch (err) {
+      console.error("Batch match error:", err);
+    }
+  }, [processNextJob]);
+
   const handleOpenAllJobs = () => {
     jobs.forEach((job) => {
       if (job.applyUrl) {
@@ -214,40 +286,53 @@ export default function VacantesPage() {
     });
   };
 
-  const handleBuscarVacantes = async (
-    site: string,
-    searchTerm?: string,
-    hoursOld?: number,
-  ) => {
-    setIsScraping(site);
+  const handleJobSearch = async (query: string, location: string, datePosted: string, remoteOnly: boolean, provider: string) => {
+    setIsScraping(provider);
     try {
-      const res = await fetch("/api/scrape", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          site,
-          searchTerm: searchTerm || "frontend developer",
-          hoursOld: hoursOld || 24,
-        }),
+      const res = await fetch('/api/jobs/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, location, datePosted, remoteOnly, provider }),
       });
       const data = await res.json();
-
       if (res.ok && data.success) {
         await fetchJobs();
-        setAlertMsg(
-          `¡Búsqueda finalizada! Se agregaron ${data.count} empleos desde múltiples portales.`,
-        );
+        if (data.count > 0) {
+          triggerBatchMatch();
+          setAlertMsg(`${data.count} new jobs found! AI matching started...`);
+        } else {
+          setAlertMsg(data.message || 'No new results.');
+        }
       } else {
-        throw new Error(data.error || "Error desconocido");
+        throw new Error(data.error || 'Unknown error');
       }
     } catch (err: any) {
-      console.error(err);
-      setAlertMsg(
-        "Error al intentar buscar vacantes (asegurate de tener python3): " +
-          err.message,
-      );
+      setAlertMsg('Error searching jobs: ' + err.message);
     } finally {
       setIsScraping(null);
+    }
+  };
+
+  const handleTailorCV = async (job: JobPost, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setTailoring(job.id);
+    try {
+      const res = await fetch('/api/cv/tailor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: job.id }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setTailorResult({ job, data });
+      } else {
+        setAlertMsg(data.error || 'Error tailoring CV');
+      }
+    } catch (err: any) {
+      setAlertMsg('Error tailoring CV: ' + err.message);
+    } finally {
+      setTailoring(null);
     }
   };
 
@@ -271,15 +356,18 @@ export default function VacantesPage() {
         onConfirm={doBulkDelete}
         onCancel={() => setConfirmBulkDelete(false)}
       />
-      <ScrapeModal
-        open={showScrapeModal}
-        onClose={() => setShowScrapeModal(false)}
-        onConfirm={(site, term, hours) => {
-          setShowScrapeModal(false);
-          handleBuscarVacantes(site, term, hours);
+      <JobSearchModal
+        open={showSearchModal}
+        onClose={() => setShowSearchModal(false)}
+        onConfirm={(query, location, datePosted, remoteOnly, provider) => {
+          setShowSearchModal(false);
+          handleJobSearch(query, location, datePosted, remoteOnly, provider);
         }}
-        initialTerm={scrapeTerm}
-        initialHours={scrapeHours}
+      />
+      <TailorResultModal
+        open={!!tailorResult}
+        result={tailorResult}
+        onClose={() => setTailorResult(null)}
       />
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 py-8">
@@ -331,14 +419,31 @@ export default function VacantesPage() {
                 Vaciar todo
               </button>
               <button
-                onClick={() => setShowScrapeModal(true)}
+                onClick={() => setShowSearchModal(true)}
                 disabled={isScraping !== null || loading}
                 className="flex items-center justify-center min-w-[160px] gap-2 text-sm bg-indigo-600 text-white px-4 py-2.5 rounded-xl hover:bg-indigo-700 transition-all disabled:opacity-75 shadow-lg shadow-indigo-100 font-bold"
               >
-                🔍 Search Jobs
+                Search Jobs
               </button>
             </div>
           </div>
+
+          {batchProgress && !batchProgress.isComplete && (
+            <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 mb-4 flex items-center gap-3">
+              <span className="w-5 h-5 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin shrink-0" />
+              <div className="flex-1">
+                <span className="text-sm font-bold text-indigo-700">
+                  Analyzing jobs with AI... {batchProgress.processed}/{batchProgress.total}
+                </span>
+                <div className="w-full bg-indigo-100 rounded-full h-1.5 mt-2">
+                  <div
+                    className="bg-indigo-600 h-1.5 rounded-full transition-all duration-500"
+                    style={{ width: `${(batchProgress.processed / batchProgress.total) * 100}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="bg-white border border-gray-200 rounded-2xl p-4 mb-6 flex flex-wrap items-center gap-4 shadow-sm">
             <div className="flex items-center gap-2 px-3 py-1 border-r border-gray-100 pr-4">
@@ -483,6 +588,11 @@ export default function VacantesPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {[...jobs]
                   .sort((a, b) => {
+                    if (sort === "best_match") {
+                      const scoreA = a.matchScore ?? -2;
+                      const scoreB = b.matchScore ?? -2;
+                      return scoreB - scoreA;
+                    }
                     const dateA = new Date(
                       a.postedAt || a.createdAt || 0,
                     ).getTime();
@@ -505,6 +615,7 @@ export default function VacantesPage() {
                       onApply={handleApply}
                       onDelete={handleDelete}
                       onIgnore={handleIgnore}
+                      onTailorCV={handleTailorCV}
                       hasHistory={appliedCompanies[job.company?.toLowerCase().trim()] !== undefined}
                       lastAppliedDate={appliedCompanies[job.company?.toLowerCase().trim()]}
                     />
@@ -543,18 +654,20 @@ export default function VacantesPage() {
         message={alertMsg || ""}
       />
 
-      {(isScraping || clearingAll || deleting) && (
+      {(isScraping || clearingAll || deleting || tailoring) && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/40 backdrop-blur-sm">
           <div className="bg-white p-8 rounded-3xl shadow-2xl flex flex-col items-center gap-4 animate-in zoom-in-95 duration-200">
             <span className="w-12 h-12 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin" />
             <p className="text-gray-800 font-bold tracking-tight">
               {isScraping === "ignoring"
                 ? "Silenciando vacante..."
-                : isScraping
-                  ? "Buscando vacantes..."
-                  : clearingAll
-                    ? "Borrando vacantes..."
-                    : "Borrando vacante..."}
+                : tailoring
+                  ? "Adapting CV..."
+                  : isScraping
+                    ? "Searching jobs..."
+                    : clearingAll
+                      ? "Deleting jobs..."
+                      : "Deleting job..."}
             </p>
           </div>
         </div>
@@ -572,6 +685,7 @@ function JobCard({
   onApply,
   onDelete,
   onIgnore,
+  onTailorCV,
   hasHistory,
   lastAppliedDate,
 }: {
@@ -583,6 +697,7 @@ function JobCard({
   onApply: (job: JobPost, e: React.MouseEvent) => void;
   onDelete: (id: string, e: React.MouseEvent) => void;
   onIgnore: (job: JobPost, muteCompany: boolean, e: React.MouseEvent) => void;
+  onTailorCV: (job: JobPost, e: React.MouseEvent) => void;
   hasHistory?: boolean;
   lastAppliedDate?: string;
 }) {
@@ -633,6 +748,20 @@ function JobCard({
             <h3 className="font-bold text-gray-900 text-sm leading-snug group-hover:text-indigo-600 transition-colors flex-1 ">
               {job.title}
             </h3>
+            {job.matchScore != null && job.matchScore >= 0 && (
+              <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                job.matchScore >= 80 ? 'bg-green-50 text-green-600' :
+                job.matchScore >= 50 ? 'bg-yellow-50 text-yellow-600' :
+                'bg-red-50 text-red-500'
+              }`}>
+                {job.matchScore}%
+              </span>
+            )}
+            {job.matchScore == null && (
+              <span className="shrink-0 text-[10px] bg-gray-50 text-gray-400 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                ...
+              </span>
+            )}
             {isNew && (
               <span className="shrink-0 text-[10px] bg-indigo-50 text-indigo-600 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
                 Nuevo
@@ -696,6 +825,16 @@ function JobCard({
               className="flex-1 text-[11px] font-bold py-3 rounded-xl bg-gray-900 text-white hover:bg-indigo-600 transition-all shadow-lg shadow-gray-200 active:scale-95"
             >
               Postular ahora →
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onTailorCV(job, e);
+              }}
+              className="text-[11px] font-bold py-3 px-3 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 active:scale-95"
+              title="Adapt CV for this position"
+            >
+              CV
             </button>
           </div>
         </div>
@@ -801,30 +940,42 @@ function Tag({
   );
 }
 
-function ScrapeModal({
+function JobSearchModal({
   open,
   onClose,
   onConfirm,
-  initialTerm,
-  initialHours,
 }: {
   open: boolean;
   onClose: () => void;
-  onConfirm: (site: string, term: string, hours: number) => void;
-  initialTerm: string;
-  initialHours: number;
+  onConfirm: (query: string, location: string, datePosted: string, remoteOnly: boolean, provider: string) => void;
 }) {
-  const [term, setTerm] = useState(initialTerm);
-  const [timeValue, setTimeValue] = useState(initialHours);
-  const [timeUnit, setTimeUnit] = useState<"min" | "hr">("hr");
-  const [site, setSite] = useState("all");
+  const [query, setQuery] = useState('frontend developer');
+  const [location, setLocation] = useState('Remote');
+  const [datePosted, setDatePosted] = useState('week');
+  const [remoteOnly, setRemoteOnly] = useState(false);
+  const [provider, setProvider] = useState('jobspy');
 
-  const SITES = [
-    { id: "all", label: "Todos", icon: "🌍" },
-    { id: "linkedin", label: "LinkedIn", icon: "🔗" },
-    { id: "indeed", label: "Indeed", icon: "💼" },
-    { id: "glassdoor", label: "Glassdoor", icon: "🏢" },
-    { id: "google", label: "Google", icon: "🔍" },
+  const PROVIDERS = [
+    { value: 'jobspy', label: 'JobSpy', desc: 'LinkedIn + Indeed + Glassdoor (free)' },
+    { value: 'linkedin-api', label: 'LinkedIn API', desc: 'Direct LinkedIn search (RapidAPI)' },
+    { value: 'jsearch', label: 'JSearch', desc: 'Multi-source aggregator (RapidAPI)' },
+  ];
+
+  const LOCATIONS = [
+    { value: 'Argentina', label: 'Argentina' },
+    { value: 'United States', label: 'USA' },
+    { value: 'España', label: 'Spain' },
+    { value: 'México', label: 'Mexico' },
+    { value: 'Colombia', label: 'Colombia' },
+    { value: 'Remote', label: 'Remote' },
+  ];
+
+  const DATE_OPTIONS = [
+    { value: 'today', label: 'Today' },
+    { value: '3days', label: '3 days' },
+    { value: 'week', label: 'This week' },
+    { value: 'month', label: 'This month' },
+    { value: 'all', label: 'All' },
   ];
 
   if (!open) return null;
@@ -837,51 +988,35 @@ function ScrapeModal({
       >
         <div className="flex items-center gap-3 mb-6">
           <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="11" cy="11" r="8"></circle>
               <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
             </svg>
           </div>
           <div>
-            <h2 className="text-xl font-bold text-gray-900 tracking-tight">
-              Buscar nuevas vacantes
-            </h2>
-            <p className="text-xs text-gray-500 font-medium">
-              Configura los parámetros de búsqueda
-            </p>
+            <h2 className="text-xl font-bold text-gray-900 tracking-tight">Search Jobs</h2>
+            <p className="text-xs text-gray-500 font-medium">{PROVIDERS.find(p => p.value === provider)?.desc}</p>
           </div>
         </div>
 
         <div className="space-y-5">
           <div>
             <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">
-              Plataforma
+              API Provider
             </label>
-            <div className="grid grid-cols-3 gap-2">
-              {SITES.map((s) => (
+            <div className="grid grid-cols-2 gap-2">
+              {PROVIDERS.map((p) => (
                 <button
-                  key={s.id}
-                  onClick={() => setSite(s.id)}
-                  className={`flex flex-col items-center gap-1 p-2 rounded-xl border-2 transition-all ${
-                    site === s.id
-                      ? "border-indigo-600 bg-indigo-50 text-indigo-700"
-                      : "border-gray-100 bg-gray-50 text-gray-400 hover:border-gray-200"
+                  key={p.value}
+                  onClick={() => setProvider(p.value)}
+                  className={`flex flex-col items-center gap-0.5 p-3 rounded-xl border-2 transition-all ${
+                    provider === p.value
+                      ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                      : 'border-gray-100 bg-gray-50 text-gray-400 hover:border-gray-200'
                   }`}
                 >
-                  <span className="text-lg">{s.icon}</span>
-                  <span className="text-[10px] font-bold uppercase">
-                    {s.label}
-                  </span>
+                  <span className="text-xs font-bold">{p.label}</span>
+                  <span className="text-[9px] font-medium opacity-70">{p.desc}</span>
                 </button>
               ))}
             </div>
@@ -889,41 +1024,74 @@ function ScrapeModal({
 
           <div>
             <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">
-              {site === "google"
-                ? "Término de búsqueda de Google"
-                : "Título del trabajo"}
+              Search query
             </label>
             <input
               type="text"
-              value={term}
-              onChange={(e) => setTerm(e.target.value)}
-              placeholder={
-                site === "google"
-                  ? "Ej: software engineer jobs remote..."
-                  : "Ej: Frontend Developer, React..."
-              }
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="e.g. React developer, Frontend Engineer..."
               className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 text-sm focus:bg-white focus:ring-4 focus:ring-indigo-50 focus:border-indigo-200 transition-all outline-none font-medium text-gray-700"
               autoFocus
             />
           </div>
 
-          <div className="flex justify-between items-center mb-1">
-            <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg">
-              Últimas {timeValue} {timeValue === 1 ? "hora" : "horas"}
-            </span>
+          <div>
+            <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">
+              Location
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {LOCATIONS.map((l) => (
+                <button
+                  key={l.value}
+                  onClick={() => setLocation(l.value)}
+                  className={`flex items-center justify-center gap-1 p-2.5 rounded-xl border-2 text-xs font-bold transition-all ${
+                    location === l.value
+                      ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                      : 'border-gray-100 bg-gray-50 text-gray-400 hover:border-gray-200'
+                  }`}
+                >
+                  {l.label}
+                </button>
+              ))}
+            </div>
           </div>
-          <input
-            type="range"
-            min="1"
-            max="24"
-            value={timeValue}
-            onChange={(e) => setTimeValue(parseInt(e.target.value))}
-            className="w-full h-2 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-          />
-          <div className="flex justify-between mt-2 text-[10px] font-bold text-gray-300 uppercase tracking-widest">
-            <span>1h</span>
-            <span>12h</span>
-            <span>24h</span>
+
+          <div>
+            <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">
+              Posted within
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {DATE_OPTIONS.map((d) => (
+                <button
+                  key={d.value}
+                  onClick={() => setDatePosted(d.value)}
+                  className={`text-xs px-3 py-1.5 rounded-lg border-2 font-bold transition-all ${
+                    datePosted === d.value
+                      ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                      : 'border-gray-100 bg-gray-50 text-gray-400 hover:border-gray-200'
+                  }`}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setRemoteOnly(!remoteOnly)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                remoteOnly ? 'bg-indigo-600' : 'bg-gray-200'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  remoteOnly ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+            <span className="text-sm font-bold text-gray-600">Remote only</span>
           </div>
         </div>
 
@@ -932,20 +1100,125 @@ function ScrapeModal({
             onClick={onClose}
             className="flex-1 text-gray-500 text-sm font-bold py-3.5 rounded-2xl hover:bg-gray-50 transition-all active:scale-95"
           >
-            Cancelar
+            Cancel
           </button>
           <button
-            onClick={() =>
-              onConfirm(
-                site,
-                term,
-                timeUnit === "min" ? timeValue / 60 : timeValue,
-              )
-            }
-            disabled={!term.trim()}
+            onClick={() => onConfirm(query, location, datePosted, remoteOnly, provider)}
+            disabled={!query.trim()}
             className="flex-[2] bg-indigo-600 text-white text-sm font-bold py-3.5 rounded-2xl hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all active:scale-95 disabled:opacity-50 disabled:grayscale"
           >
-            Iniciar búsqueda
+            Search Jobs
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TailorResultModal({
+  open,
+  result,
+  onClose,
+}: {
+  open: boolean;
+  result: { job: JobPost; data: any } | null;
+  onClose: () => void;
+}) {
+  if (!open || !result) return null;
+
+  const { job, data } = result;
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+      <div
+        className="bg-white rounded-3xl shadow-2xl p-8 max-w-2xl w-full max-h-[85vh] overflow-y-auto animate-in zoom-in-95 duration-200"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 tracking-tight">Tailored CV</h2>
+            <p className="text-xs text-gray-500 font-medium">{job.title} at {job.company}</p>
+          </div>
+        </div>
+
+        {data.match_improvement && (
+          <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 mb-4">
+            <p className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider mb-1">Match Improvement</p>
+            <p className="text-sm text-emerald-800">{data.match_improvement}</p>
+          </div>
+        )}
+
+        {data.keywords_added && data.keywords_added.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-4">
+            {data.keywords_added.map((kw: string, i: number) => (
+              <span key={i} className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border bg-indigo-50 text-indigo-600 border-indigo-100">
+                {kw}
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div className="space-y-4">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Tailored CV</p>
+              <button
+                onClick={() => copyToClipboard(data.tailored_cv)}
+                className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 uppercase tracking-wider transition-colors"
+              >
+                Copy
+              </button>
+            </div>
+            <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4 text-sm text-gray-700 whitespace-pre-wrap max-h-60 overflow-y-auto font-mono leading-relaxed">
+              {data.tailored_cv}
+            </div>
+          </div>
+
+          {data.cover_letter_suggestion && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Cover Letter</p>
+                <button
+                  onClick={() => copyToClipboard(data.cover_letter_suggestion)}
+                  className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 uppercase tracking-wider transition-colors"
+                >
+                  Copy
+                </button>
+              </div>
+              <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4 text-sm text-gray-700 whitespace-pre-wrap">
+                {data.cover_letter_suggestion}
+              </div>
+            </div>
+          )}
+
+          {data.changes_made && data.changes_made.length > 0 && (
+            <div>
+              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Changes Made</p>
+              <ul className="space-y-1">
+                {data.changes_made.map((change: string, i: number) => (
+                  <li key={i} className="text-xs text-gray-600 flex items-start gap-2">
+                    <span className="text-emerald-500 mt-0.5">•</span>
+                    {change}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+
+        <div className="mt-8">
+          <button
+            onClick={onClose}
+            className="w-full text-gray-500 text-sm font-bold py-3.5 rounded-2xl hover:bg-gray-50 transition-all active:scale-95 border border-gray-200"
+          >
+            Close
           </button>
         </div>
       </div>
