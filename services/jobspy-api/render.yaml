@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: jobspy-api
+    runtime: docker
+    plan: free
+    envVars:
+      - key: API_SECRET
+        generateValue: true
+      - key: ALLOWED_ORIGINS
+        value: https://your-app.vercel.app,http://localhost:3000

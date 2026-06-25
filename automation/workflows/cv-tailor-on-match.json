@@ -1,0 +1,440 @@
+{
+  "name": "CV Tailor \u2014 On Match Webhook",
+  "nodes": [
+    {
+      "id": "webhook-trigger",
+      "name": "Webhook \u2014 Tailor CV",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "cv-tailor-on-match",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "cv-tailor",
+        "responseMode": "lastNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "validate-input",
+      "name": "Code \u2014 Validate Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst userId = body.userId;\nconst jobId  = body.jobId;\n\nif (!userId || !jobId) {\n  throw new Error('Missing required fields: userId and jobId');\n}\n\nreturn [{ json: { userId, jobId } }];"
+      }
+    },
+    {
+      "id": "get-job",
+      "name": "Supabase \u2014 Get Job Post",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        480,
+        160
+      ],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/job_posts",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "=eq.{{ $json.jobId }}"
+            },
+            {
+              "name": "select",
+              "value": "id,title,company,description,required_skills,modality,location"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.pgrst.object+json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      }
+    },
+    {
+      "id": "get-resume",
+      "name": "Supabase \u2014 Get Active Resume",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        480,
+        300
+      ],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/resumes",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "user_id",
+              "value": "=eq.{{ $('Code \u2014 Validate Input').first().json.userId }}"
+            },
+            {
+              "name": "is_active",
+              "value": "eq.true"
+            },
+            {
+              "name": "select",
+              "value": "raw_text"
+            },
+            {
+              "name": "limit",
+              "value": "1"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.pgrst.object+json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      }
+    },
+    {
+      "id": "get-profile",
+      "name": "Supabase \u2014 Get Search Profile",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        480,
+        440
+      ],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/search_profiles",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "user_id",
+              "value": "=eq.{{ $('Code \u2014 Validate Input').first().json.userId }}"
+            },
+            {
+              "name": "is_active",
+              "value": "eq.true"
+            },
+            {
+              "name": "select",
+              "value": "title,seniority,primary_skills,secondary_skills,years_experience,preferred_modality,languages"
+            },
+            {
+              "name": "limit",
+              "value": "1"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.pgrst.object+json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      }
+    },
+    {
+      "id": "build-gemini-prompt",
+      "name": "Code \u2014 Build Gemini Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const job     = $('Supabase \u2014 Get Job Post').first().json;\nconst resume  = $('Supabase \u2014 Get Active Resume').first().json;\nconst profile = $('Supabase \u2014 Get Search Profile').first().json;\n\nif (!resume || !resume.raw_text) {\n  throw new Error('No active resume found for this user. Please upload a CV first.');\n}\nif (!job || !job.description || job.description.length < 20) {\n  throw new Error('Job description is missing or too short to tailor against.');\n}\n\nconst primarySkills  = (profile.primary_skills  || []).join(', ');\nconst secondarySkills= (profile.secondary_skills || []).join(', ');\nconst languages = Array.isArray(profile.languages)\n  ? profile.languages.map(l => l.lang + ' (' + l.level + ')').join(', ')\n  : 'Not specified';\n\nconst prompt = `You are an expert career coach and CV writer. Tailor the candidate's CV to better match the specific job posting below.\n\nIMPORTANT: Respond ONLY with a valid JSON object. No text outside the JSON.\n\nORIGINAL CV:\n${resume.raw_text}\n\nCANDIDATE PROFILE:\n- Target role: ${profile.title || 'Not specified'}\n- Seniority: ${profile.seniority || 'Not specified'}\n- Primary skills: ${primarySkills}\n- Secondary skills: ${secondarySkills}\n- Years of experience: ${profile.years_experience || 'Not specified'}\n- Languages: ${languages}\n\nJOB POSTING:\nTitle: ${job.title}\nCompany: ${job.company}\nDescription: ${job.description}\n\nINSTRUCTIONS:\n1. Rewrite the CV to emphasize skills and experience that match this specific job\n2. Reorder sections to highlight the most relevant experience first\n3. Use keywords from the job posting naturally throughout the CV\n4. Keep it honest \u2014 do not fabricate experience, only reframe existing experience\n5. Make the professional summary specifically address what this company is looking for\n6. If the job requires skills the candidate has but didn't highlight, bring them forward\n\nRESPONSE FORMAT (JSON only):\n{\n  \"tailored_cv\": \"The complete tailored CV as plain text, ready to copy-paste\",\n  \"changes_made\": [\"List of specific changes made\"],\n  \"keywords_added\": [\"Keywords from the job posting incorporated\"],\n  \"match_improvement\": \"Brief explanation of how the tailored CV better matches this position\",\n  \"cover_letter_suggestion\": \"A personalized cover letter opening paragraph for this position\"\n}`;\n\nreturn [{ json: { prompt, jobId: job.id, jobTitle: job.title, company: job.company } }];"
+      }
+    },
+    {
+      "id": "gemini-api",
+      "name": "HTTP \u2014 Gemini generateContent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        960,
+        300
+      ],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={{ $env.GEMINI_API_KEY }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ contents: [{ parts: [{ text: $json.prompt }] }], generationConfig: { responseMimeType: 'application/json', temperature: 0.4, maxOutputTokens: 8192 } }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      }
+    },
+    {
+      "id": "parse-gemini-response",
+      "name": "Code \u2014 Parse Gemini Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const geminiResponse = $input.first().json;\nconst rawText = geminiResponse?.candidates?.[0]?.content?.parts?.[0]?.text || '';\n\nif (!rawText) {\n  throw new Error('Gemini returned an empty response. The model may have refused the request.');\n}\n\nlet parsed;\ntry {\n  const cleaned = rawText.replace(/```json|```/g, '').trim();\n  parsed = JSON.parse(cleaned);\n} catch (e) {\n  throw new Error('Could not parse Gemini JSON response: ' + e.message);\n}\n\nconst jobMeta = $('Code \u2014 Build Gemini Prompt').first().json;\n\nreturn [{\n  json: {\n    success: true,\n    jobId:   jobMeta.jobId,\n    jobTitle:jobMeta.jobTitle,\n    company: jobMeta.company,\n    ...parsed\n  }\n}];"
+      }
+    },
+    {
+      "id": "respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1440,
+        300
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "respond-error",
+      "name": "Respond \u2014 Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1440,
+        480
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: false, error: $json.error?.message || 'Unexpected error in CV tailor workflow' }) }}",
+        "options": {
+          "responseCode": 500,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook \u2014 Tailor CV": {
+      "main": [
+        [
+          {
+            "node": "Code \u2014 Validate Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code \u2014 Validate Input": {
+      "main": [
+        [
+          {
+            "node": "Supabase \u2014 Get Job Post",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Supabase \u2014 Get Active Resume",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Supabase \u2014 Get Search Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase \u2014 Get Job Post": {
+      "main": [
+        [
+          {
+            "node": "Code \u2014 Build Gemini Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond \u2014 Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase \u2014 Get Active Resume": {
+      "main": [
+        [
+          {
+            "node": "Code \u2014 Build Gemini Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond \u2014 Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase \u2014 Get Search Profile": {
+      "main": [
+        [
+          {
+            "node": "Code \u2014 Build Gemini Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond \u2014 Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code \u2014 Build Gemini Prompt": {
+      "main": [
+        [
+          {
+            "node": "HTTP \u2014 Gemini generateContent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP \u2014 Gemini generateContent": {
+      "main": [
+        [
+          {
+            "node": "Code \u2014 Parse Gemini Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond \u2014 Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code \u2014 Parse Gemini Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-06-23T00:00:00.000Z",
+  "versionId": "1"
+}

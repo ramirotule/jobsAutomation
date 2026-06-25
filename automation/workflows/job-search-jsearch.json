@@ -1,0 +1,534 @@
+{
+  "name": "Job Search \u2014 JSearch API",
+  "nodes": [
+    {
+      "id": "cron-trigger",
+      "name": "Cron \u2014 Every 2 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 */2 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "get-profiles",
+      "name": "Supabase \u2014 Get Active Search Profiles",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        240,
+        300
+      ],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/search_profiles",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "is_active",
+              "value": "eq.true"
+            },
+            {
+              "name": "select",
+              "value": "*"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      }
+    },
+    {
+      "id": "loop-profiles",
+      "name": "Loop \u2014 Split Profiles",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        480,
+        300
+      ],
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      }
+    },
+    {
+      "id": "build-queries",
+      "name": "Code \u2014 Build Search Queries",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const profile = $input.first().json;\nconst roles = (profile.target_roles || ['frontend developer']).slice(0, 3);\nconst modality = profile.preferred_modality || 'remote';\n\nreturn roles.map(role => ({\n  json: {\n    query: modality === 'remote' ? role + ' remote' : role,\n    profile_user_id: profile.user_id,\n    seniority: profile.seniority,\n    preferred_modality: modality,\n    min_score_threshold: profile.min_score_threshold || 60,\n    alert_score_threshold: profile.alert_score_threshold || 75,\n    primary_skills: profile.primary_skills || [],\n  }\n}));"
+      }
+    },
+    {
+      "id": "jsearch-api",
+      "name": "HTTP \u2014 JSearch Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        960,
+        300
+      ],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "method": "GET",
+        "url": "https://jsearch.p.rapidapi.com/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{ $json.query }}"
+            },
+            {
+              "name": "num_pages",
+              "value": "1"
+            },
+            {
+              "name": "date_posted",
+              "value": "today"
+            },
+            {
+              "name": "remote_jobs_only",
+              "value": "={{ $json.preferred_modality === 'remote' ? 'true' : 'false' }}"
+            },
+            {
+              "name": "employment_types",
+              "value": "FULLTIME,CONTRACTOR"
+            },
+            {
+              "name": "country",
+              "value": "us"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-RapidAPI-Key",
+              "value": "={{ $env.RAPIDAPI_KEY }}"
+            },
+            {
+              "name": "X-RapidAPI-Host",
+              "value": "jsearch.p.rapidapi.com"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        }
+      }
+    },
+    {
+      "id": "normalize-jobs",
+      "name": "Code \u2014 Normalize to job_posts Schema",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const KNOWN_SKILLS = [\n  'javascript','typescript','react','react native','next.js','nextjs',\n  'node.js','nodejs','vue','angular','svelte','graphql','rest','api',\n  'html','css','tailwind','sass','webpack','vite','jest','vitest',\n  'testing library','cypress','playwright','git','github','gitlab',\n  'docker','aws','gcp','azure','postgresql','mysql','mongodb',\n  'redis','python','java','kotlin','swift','go','rust','php',\n  'figma','storybook','redux','zustand','mobx','rxjs','expo',\n  'firebase','supabase','vercel','netlify','ci/cd','agile','scrum',\n];\n\nfunction extractSkills(quals) {\n  if (!quals || !quals.length) return [];\n  const text = quals.join(' ').toLowerCase();\n  return KNOWN_SKILLS.filter(s => text.includes(s));\n}\n\nconst responseData = $input.first().json;\nconst rawJobs = Array.isArray(responseData.data) ? responseData.data : [];\nconst profileUserId = $('Code \u2014 Build Search Queries').first().json.profile_user_id;\n\nconst normalized = rawJobs.map(job => ({\n  json: {\n    user_id: profileUserId,\n    external_id: job.job_id,\n    title: job.job_title,\n    company: job.employer_name,\n    location: [job.job_city, job.job_state, job.job_country].filter(Boolean).join(', '),\n    apply_url: job.job_apply_link,\n    description: job.job_description,\n    modality: job.job_is_remote ? 'remote' : 'onsite',\n    posted_at: job.job_posted_at_datetime_utc || new Date().toISOString(),\n    salary_min: job.job_min_salary || null,\n    salary_max: job.job_max_salary || null,\n    salary_currency: job.job_salary_currency || 'USD',\n    salary_period: job.job_salary_period || 'yearly',\n    required_skills: job.job_required_skills || extractSkills(job.job_highlights?.Qualifications),\n  }\n}));\n\nif (!normalized.length) return [{ json: { skipped: true, reason: 'no_results' } }];\nreturn normalized;"
+      }
+    },
+    {
+      "id": "get-ignored",
+      "name": "Supabase \u2014 Get Ignored Jobs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1440,
+        300
+      ],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/ignored_jobs",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "user_id",
+              "value": "=eq.{{ $('Code \u2014 Build Search Queries').first().json.profile_user_id }}"
+            },
+            {
+              "name": "select",
+              "value": "external_id,company"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      }
+    },
+    {
+      "id": "filter-jobs",
+      "name": "Code \u2014 Filter Blacklisted Companies",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const normalizedJobs = $('Code \u2014 Normalize to job_posts Schema').all();\nconst ignoredRaw = $input.first().json;\n\n// ignored_jobs endpoint returns an array\nconst ignoredList = Array.isArray(ignoredRaw) ? ignoredRaw : [];\nconst ignoredCompanies = new Set(ignoredList.map(ij => (ij.company || '').toLowerCase().trim()));\nconst ignoredIds = new Set(ignoredList.map(ij => ij.external_id).filter(Boolean));\n\nconst seen = new Set();\nconst filtered = normalizedJobs\n  .filter(item => {\n    if (item.json.skipped) return false;\n    const company = (item.json.company || '').toLowerCase().trim();\n    const extId = item.json.external_id;\n    if (ignoredCompanies.has(company)) return false;\n    if (extId && ignoredIds.has(extId)) return false;\n    if (seen.has(company)) return false;\n    seen.add(company);\n    return true;\n  });\n\nif (!filtered.length) return [{ json: { skipped: true, reason: 'all_filtered', total_before: normalizedJobs.length } }];\nreturn filtered;"
+      }
+    },
+    {
+      "id": "upsert-jobs",
+      "name": "Supabase \u2014 Upsert job_posts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1920,
+        300
+      ],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/job_posts",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=representation"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($input.all().filter(i => !i.json.skipped).map(i => i.json)) }}",
+        "options": {
+          "timeout": 20000
+        }
+      }
+    },
+    {
+      "id": "check-new-jobs",
+      "name": "IF \u2014 New Jobs Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2160,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-count",
+              "leftValue": "={{ Array.isArray($json) ? $json.length : 0 }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "telegram-notify",
+      "name": "Telegram \u2014 Notify New Jobs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        2400,
+        200
+      ],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "chat_id",
+              "value": "={{ $env.TELEGRAM_CHAT_ID }}"
+            },
+            {
+              "name": "text",
+              "value": "=\ud83d\udd0d jobHunter found {{ Array.isArray($json) ? $json.length : 0 }} new jobs matching your profile! Open the app to review them."
+            },
+            {
+              "name": "parse_mode",
+              "value": "Markdown"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      }
+    },
+    {
+      "id": "log-error",
+      "name": "Code \u2014 Log Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        460
+      ],
+      "parameters": {
+        "jsCode": "const error = $input.first().json;\nconsole.error('[jobHunter] HTTP error in workflow:', JSON.stringify(error));\nreturn [{ json: { logged: true, error } }];"
+      }
+    },
+    {
+      "id": "loop-continue",
+      "name": "Loop \u2014 Continue or Done",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2640,
+        300
+      ],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Cron \u2014 Every 2 Hours": {
+      "main": [
+        [
+          {
+            "node": "Supabase \u2014 Get Active Search Profiles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase \u2014 Get Active Search Profiles": {
+      "main": [
+        [
+          {
+            "node": "Loop \u2014 Split Profiles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop \u2014 Split Profiles": {
+      "main": [
+        [
+          {
+            "node": "Code \u2014 Build Search Queries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code \u2014 Build Search Queries": {
+      "main": [
+        [
+          {
+            "node": "HTTP \u2014 JSearch Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP \u2014 JSearch Search": {
+      "main": [
+        [
+          {
+            "node": "Code \u2014 Normalize to job_posts Schema",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code \u2014 Log Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code \u2014 Normalize to job_posts Schema": {
+      "main": [
+        [
+          {
+            "node": "Supabase \u2014 Get Ignored Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase \u2014 Get Ignored Jobs": {
+      "main": [
+        [
+          {
+            "node": "Code \u2014 Filter Blacklisted Companies",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code \u2014 Log Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code \u2014 Filter Blacklisted Companies": {
+      "main": [
+        [
+          {
+            "node": "Supabase \u2014 Upsert job_posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase \u2014 Upsert job_posts": {
+      "main": [
+        [
+          {
+            "node": "IF \u2014 New Jobs Found?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code \u2014 Log Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF \u2014 New Jobs Found?": {
+      "main": [
+        [
+          {
+            "node": "Telegram \u2014 Notify New Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop \u2014 Continue or Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram \u2014 Notify New Jobs": {
+      "main": [
+        [
+          {
+            "node": "Loop \u2014 Continue or Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop \u2014 Continue or Done": {
+      "main": [
+        [
+          {
+            "node": "Loop \u2014 Split Profiles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2026-06-23T00:00:00.000Z",
+  "versionId": "1"
+}
