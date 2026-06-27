@@ -329,10 +329,10 @@ export default function PerfilPage() {
     setForm((prev) => ({ ...prev, [key]: e.target.value }));
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-20">
       {/* Dynamic Toast */}
       {toast && (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-4 duration-300">
+        <div className="fixed top-20 lg:top-6 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-4 duration-300">
           <div className={`px-6 py-3 rounded-2xl shadow-2xl backdrop-blur-md border border-white/20 flex items-center gap-3 ${
             toast.type === 'success' ? 'bg-green-600/90 text-white' : 'bg-red-600/90 text-white'
           }`}>
@@ -342,14 +342,14 @@ export default function PerfilPage() {
         </div>
       )}
 
-      <div className="max-w-3xl mx-auto px-4 py-8">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Mi Perfil</h1>
-          <p className="text-gray-500 text-sm mt-1">Configura tu identidad, criterios de búsqueda y CV</p>
+      <div className="max-w-3xl mx-auto px-4 py-5 lg:py-8">
+        <div className="mb-5">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Mi Perfil</h1>
+          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Configura tu identidad, criterios de búsqueda y CV</p>
         </div>
 
         {/* Tabs */}
-        <div className="flex flex-wrap gap-2 mb-6">
+        <div className="flex gap-2 mb-5 overflow-x-auto pb-1 scrollbar-none -mx-4 px-4 lg:mx-0 lg:px-0 lg:flex-wrap">
           {[
             { key: "cuenta", label: "Mi Cuenta" },
             { key: "perfil", label: "Criterios" },
@@ -360,10 +360,10 @@ export default function PerfilPage() {
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key as any)}
-              className={`text-sm px-4 py-2 rounded-lg border transition-colors ${
+              className={`text-sm px-4 py-2 rounded-lg border transition-colors whitespace-nowrap shrink-0 ${
                 activeTab === tab.key
                   ? "bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-100"
-                  : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                  : "bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
               }`}
             >
               {tab.label}
@@ -372,8 +372,8 @@ export default function PerfilPage() {
         </div>
 
         {activeTab === "cuenta" && (
-          <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 sm:p-6 space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Nombre">
                 <input value={firstName} onChange={(e) => setFirstName(e.target.value)} className={inputCls} />
               </Field>
@@ -381,57 +381,29 @@ export default function PerfilPage() {
                 <input value={lastName} onChange={(e) => setLastName(e.target.value)} className={inputCls} />
               </Field>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Field label="LinkedIn URL">
-                <input 
-                  type="url"
-                  value={linkedin_url} 
-                  onChange={(e) => setLinkedinUrl(e.target.value)} 
-                  className={inputCls} 
-                  placeholder="https://linkedin.com/in/..." 
-                  autoComplete="off"
-                />
-              </Field>
-              <Field label="GitHub URL">
-                <input 
-                  type="url"
-                  value={github_url} 
-                  onChange={(e) => setGithubUrl(e.target.value)} 
-                  className={inputCls} 
-                  placeholder="https://github.com/..." 
-                  autoComplete="off"
-                />
-              </Field>
-              <Field label="Portfolio URL">
-                <input 
-                  type="url"
-                  value={portfolio_url} 
-                  onChange={(e) => setPortfolioUrl(e.target.value)} 
-                  className={inputCls} 
-                  placeholder="https://..." 
-                  autoComplete="off"
-                />
-              </Field>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-              <Field label="Email" hint="No se puede cambiar">
-                <input value={userEmail} disabled className={`${inputCls} bg-gray-50 text-gray-400 cursor-not-allowed`} />
-              </Field>
-              <div className="pb-1">
-                <button 
-                  onClick={() => setIsPasswordModalOpen(true)}
-                  className="text-indigo-600 text-sm font-bold flex items-center gap-2 px-4 py-2 hover:bg-indigo-50 rounded-lg transition-all"
-                >
-                  🔒 Cambiar contraseña
-                </button>
-              </div>
-            </div>
-
-            <div className="pt-2 border-t border-gray-100 pt-6">
+            <Field label="LinkedIn URL">
+              <input type="url" value={linkedin_url} onChange={(e) => setLinkedinUrl(e.target.value)} className={inputCls} placeholder="https://linkedin.com/in/..." autoComplete="off" />
+            </Field>
+            <Field label="GitHub URL">
+              <input type="url" value={github_url} onChange={(e) => setGithubUrl(e.target.value)} className={inputCls} placeholder="https://github.com/..." autoComplete="off" />
+            </Field>
+            <Field label="Portfolio URL">
+              <input type="url" value={portfolio_url} onChange={(e) => setPortfolioUrl(e.target.value)} className={inputCls} placeholder="https://..." autoComplete="off" />
+            </Field>
+            <Field label="Email" hint="No se puede cambiar">
+              <input value={userEmail} disabled className={`${inputCls} opacity-50 cursor-not-allowed`} />
+            </Field>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-2 border-t border-gray-100 dark:border-gray-800">
+              <button
+                onClick={() => setIsPasswordModalOpen(true)}
+                className="text-indigo-600 text-sm font-bold flex items-center gap-2 px-4 py-2 hover:bg-indigo-50 dark:hover:bg-indigo-950 rounded-lg transition-all"
+              >
+                🔒 Cambiar contraseña
+              </button>
               <button
                 onClick={updateAccount}
                 disabled={savingAccount}
-                className="bg-indigo-600 text-white text-sm px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-lg shadow-indigo-200"
+                className="w-full sm:w-auto bg-indigo-600 text-white text-sm px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 transition-all"
               >
                 {savingAccount ? "Guardando..." : "Actualizar Datos"}
               </button>
@@ -440,7 +412,7 @@ export default function PerfilPage() {
         )}
 
         {activeTab === "perfil" && (
-          <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 sm:p-6 space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
             <Field label="Título profesional">
               <input value={form.title} onChange={set("title")} className={inputCls} />
             </Field>
@@ -450,7 +422,7 @@ export default function PerfilPage() {
                   {["junior", "mid", "senior", "staff", "lead"].map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </Field>
-              <Field label="Años de experiencia">
+              <Field label="Experiencia (años)">
                 <input type="number" value={form.years_experience} onChange={set("years_experience")} className={inputCls} />
               </Field>
             </div>
@@ -470,7 +442,7 @@ export default function PerfilPage() {
                 </select>
               </Field>
               <Field label="Ubicación">
-                <input value={form.location} onChange={set("location")} className={inputCls} />
+                <input value={form.location} onChange={set("location")} className={inputCls} placeholder="Ej: Buenos Aires" />
               </Field>
             </div>
             {/* Blacklist */}
@@ -530,7 +502,7 @@ export default function PerfilPage() {
             </div>
 
             <div className="pt-2">
-              <button onClick={saveProfile} disabled={saving} className="bg-indigo-600 text-white text-sm px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-lg shadow-indigo-200">
+              <button onClick={saveProfile} disabled={saving} className="w-full sm:w-auto bg-indigo-600 text-white text-sm px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 transition-all">
                 {saving ? "Guardando..." : "Guardar Criterios"}
               </button>
             </div>
@@ -568,7 +540,7 @@ export default function PerfilPage() {
               <button
                 onClick={saveTokens}
                 disabled={savingTokens}
-                className="bg-indigo-600 text-white text-sm px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-lg shadow-indigo-200"
+                className="bg-indigo-600 text-white text-sm px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 transition-all"
               >
                 {savingTokens ? "Guardando..." : "Guardar Tokens"}
               </button>
@@ -577,19 +549,17 @@ export default function PerfilPage() {
         )}
 
         {activeTab === "cv" && (
-          <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 sm:p-6 space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
             <textarea
               value={cvText}
               onChange={(e) => setCvText(e.target.value)}
-              rows={20}
+              rows={14}
               className={`${inputCls} font-mono text-xs`}
               placeholder="Pegá aquí el texto completo de tu CV..."
             />
-            <div className="pt-2">
-              <button onClick={saveCv} disabled={savingCv || !cvText.trim()} className="bg-indigo-600 text-white text-sm px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-lg shadow-indigo-200">
-                {savingCv ? "Guardando..." : "Guardar CV"}
-              </button>
-            </div>
+            <button onClick={saveCv} disabled={savingCv || !cvText.trim()} className="w-full sm:w-auto bg-indigo-600 text-white text-sm px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 transition-all">
+              {savingCv ? "Guardando..." : "Guardar CV"}
+            </button>
           </div>
         )}
 
@@ -659,7 +629,7 @@ export default function PerfilPage() {
             </div>
 
             <div className="pt-2">
-              <button onClick={saveKit} disabled={savingKit} className="bg-indigo-600 text-white text-sm px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-lg shadow-indigo-200">
+              <button onClick={saveKit} disabled={savingKit} className="bg-indigo-600 text-white text-sm px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 transition-all">
                 {savingKit ? "Guardando..." : "Guardar Kit"}
               </button>
             </div>
@@ -1108,4 +1078,4 @@ function TokenCard({
   );
 }
 
-const inputCls = "w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all text-sm";
+const inputCls = "w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-gray-800 text-slate-900 dark:text-slate-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500";

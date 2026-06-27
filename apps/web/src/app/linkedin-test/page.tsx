@@ -306,7 +306,7 @@ export default function LinkedInTestPage() {
             <button
               type="submit"
               disabled={loading}
-              className="shrink-0 h-[46px] px-6 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 disabled:cursor-not-allowed font-bold text-white rounded-xl shadow-lg hover:shadow-indigo-500/20 active:scale-95 transition-all duration-200 flex items-center justify-center gap-2"
+              className="shrink-0 h-[46px] px-6 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 disabled:cursor-not-allowed font-bold text-white rounded-xl shadow-lg active:scale-95 transition-all duration-200 flex items-center justify-center gap-2"
             >
               {loading ? (
                 <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
@@ -487,7 +487,7 @@ function PostCard({
       : "text-rose-400";
 
   return (
-    <div className={`bg-slate-800/40 hover:bg-slate-800/60 border border-slate-700/50 hover:border-indigo-500/40 rounded-2xl p-6 transition-all duration-300 flex flex-col justify-between group shadow-lg hover:shadow-indigo-500/5 animate-fadeIn ${dimmed ? "opacity-50" : ""}`}>
+    <div className={`bg-slate-800/40 hover:bg-slate-800/60 border border-slate-700/50 hover:border-indigo-500/40 rounded-2xl p-6 transition-all duration-300 flex flex-col justify-between group shadow-lg animate-fadeIn ${dimmed ? "opacity-50" : ""}`}>
       <div>
         {/* Autor */}
         <div className="flex items-start gap-3 mb-4">

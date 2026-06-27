@@ -380,7 +380,7 @@ export default function VacantesPage() {
                 <button
                   onClick={() => setConfirmBulkDelete(true)}
                   disabled={clearingAll || loading}
-                  className="bg-red-600 text-white text-sm font-bold px-4 py-2 rounded-xl hover:bg-red-700 transition-all flex items-center gap-2 shadow-lg shadow-red-100 animate-in slide-in-from-right-2"
+                  className="bg-red-600 text-white text-sm font-bold px-4 py-2 rounded-xl hover:bg-red-700 transition-all flex items-center gap-2 animate-in slide-in-from-right-2"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -404,7 +404,7 @@ export default function VacantesPage() {
               <button
                 onClick={handleOpenAllJobs}
                 disabled={jobs.length === 0 || loading}
-                className="text-sm bg-green-600 text-white font-bold px-4 py-2 rounded-xl hover:bg-green-700 transition-all shadow-lg shadow-green-100 disabled:opacity-50"
+                className="text-sm bg-green-600 text-white font-bold px-4 py-2 rounded-xl hover:bg-green-700 transition-all disabled:opacity-50"
               >
                 Abrir todas
               </button>
@@ -807,13 +807,13 @@ function JobCard({
                   window.focus();
                 }
               }}
-              className="flex-1 text-center text-[11px] font-bold py-3 rounded-xl bg-[#0a66c2] text-white hover:bg-[#004182] transition-all shadow-lg shadow-blue-100 active:scale-95"
+              className="flex-1 text-center text-[11px] font-bold py-3 rounded-xl bg-[#0a66c2] text-white hover:bg-[#004182] transition-all active:scale-95"
             >
               Ver empleo
             </button>
             <button
               onClick={(e) => onApply(job, e)}
-              className="flex-1 text-[11px] font-bold py-3 rounded-xl bg-gray-900 text-white hover:bg-indigo-600 transition-all shadow-lg shadow-gray-200 active:scale-95"
+              className="flex-1 text-[11px] font-bold py-3 rounded-xl bg-gray-900 text-white hover:bg-indigo-600 transition-all active:scale-95"
             >
               Postular ahora →
             </button>
@@ -822,7 +822,7 @@ function JobCard({
                 e.stopPropagation();
                 onTailorCV(job, e);
               }}
-              className="text-[11px] font-bold py-3 px-3 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 active:scale-95"
+              className="text-[11px] font-bold py-3 px-3 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-all active:scale-95"
               title="Adapt CV for this position"
             >
               CV
@@ -1096,7 +1096,7 @@ function JobSearchModal({
           <button
             onClick={() => onConfirm(query, location, datePosted, remoteOnly, provider)}
             disabled={!query.trim()}
-            className="flex-[2] bg-indigo-600 text-white text-sm font-bold py-3.5 rounded-2xl hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all active:scale-95 disabled:opacity-50 disabled:grayscale"
+            className="flex-[2] bg-indigo-600 text-white text-sm font-bold py-3.5 rounded-2xl hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50 disabled:grayscale"
           >
             Search Jobs
           </button>

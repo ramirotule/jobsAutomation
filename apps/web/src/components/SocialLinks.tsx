@@ -20,7 +20,7 @@ export default function SocialLinks({ linkedin, github, portfolio }: SocialLinks
   };
 
   return (
-    <div className="fixed top-6 right-8 z-[100] flex items-center gap-3 bg-white/60 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/20 shadow-xl shadow-indigo-100/20 animate-in fade-in slide-in-from-right-4 duration-700">
+    <div className="fixed top-6 right-8 z-[100] flex items-center gap-3 bg-white/60 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/20 animate-in fade-in slide-in-from-right-4 duration-700">
       <SocialIcon
         icon={<LinkedInIcon />}
         url={linkedin}
@@ -69,7 +69,7 @@ function SocialIcon({
           !url 
             ? "opacity-20 cursor-not-allowed grayscale" 
             : isCopied 
-              ? "bg-green-500 text-white scale-110 shadow-lg shadow-green-100" 
+              ? "bg-green-500 text-white scale-110" 
               : "bg-white text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 hover:shadow-md hover:-translate-y-0.5 border border-gray-100"
         }`}
       >

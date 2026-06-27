@@ -33,8 +33,8 @@ export function SidebarLinks() {
             href={link.href}
             className={`group flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-300 ease-out ${
               isActive
-                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-200 scale-[1.02]"
-                : "text-gray-500 hover:bg-white hover:text-indigo-600 hover:shadow-sm"
+                ? "bg-indigo-600 text-white scale-[1.02]"
+                : "text-gray-500 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-800 hover:text-indigo-600 dark:hover:text-indigo-400 hover:shadow-sm"
             }`}
           >
             <span className={`text-xl transition-transform duration-300 ${isActive ? "scale-110" : "group-hover:scale-110"}`}>

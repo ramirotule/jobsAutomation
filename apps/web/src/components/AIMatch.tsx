@@ -63,7 +63,7 @@ export function AIMatch({ jobDescription, jobId }: { jobDescription: string; job
           <div className="flex flex-col items-center gap-3">
             <button
               onClick={() => startAnalysis()}
-              className="bg-indigo-600 text-white text-xs font-bold px-6 py-2.5 rounded-xl hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 active:scale-95"
+              className="bg-indigo-600 text-white text-xs font-bold px-6 py-2.5 rounded-xl hover:bg-indigo-700 transition-all active:scale-95"
             >
               {isBadDescription ? "Obtener descripción y analizar" : "Analizar Compatibilidad"}
             </button>

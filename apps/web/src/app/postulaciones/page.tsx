@@ -143,136 +143,97 @@ export default function PostulacionesPage() {
         message={alertMsg || ""} 
       />
 
+      {/* Bulk action bar — above bottom nav on mobile */}
       {selectedIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-5">
-          <div className="bg-gray-900 text-white rounded-2xl shadow-2xl p-2 pl-6 flex items-center gap-4 border border-gray-800 backdrop-blur-sm">
-            <span className="text-xs font-bold whitespace-nowrap">
-              {selectedIds.size} seleccionadas
-            </span>
-            <div className="h-4 w-px bg-gray-700" />
-            <div className="flex gap-1">
-              <button
-                onClick={() => handleBulkStatusUpdate("ghosted")}
-                disabled={isUpdating}
-                className="text-[10px] font-black uppercase tracking-widest px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors"
-              >
-                Ghosteado
-              </button>
-              <button
-                onClick={() => handleBulkStatusUpdate("ignored")}
-                disabled={isUpdating}
-                className="text-[10px] font-black uppercase tracking-widest px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors text-orange-400"
-              >
-                Ignorado
-              </button>
-              <button
-                onClick={() => handleBulkStatusUpdate("rejected")}
-                disabled={isUpdating}
-                className="text-[10px] font-black uppercase tracking-widest px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors text-red-300"
-              >
-                Rechazado
-              </button>
-              <button
-                onClick={() => handleBulkStatusUpdate("applied")}
-                disabled={isUpdating}
-                className="text-[10px] font-black uppercase tracking-widest px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors text-blue-300"
-              >
-                Reset Applied
-              </button>
-              <div className="h-8 w-px bg-gray-700 mx-1" />
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-5 w-[calc(100%-2rem)] max-w-lg">
+          <div className="bg-gray-900 text-white rounded-2xl shadow-2xl px-4 py-3 flex flex-col gap-2 border border-gray-800">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold">{selectedIds.size} seleccionadas</span>
               <button
                 onClick={handleBulkDelete}
                 disabled={isUpdating}
-                className="text-red-400 hover:bg-red-900/40 p-2 rounded-lg transition-colors"
+                className="text-red-400 hover:bg-red-900/40 p-1.5 rounded-lg transition-colors"
                 title="Eliminar seleccionadas"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
               </button>
+            </div>
+            <div className="flex gap-1 flex-wrap">
+              {(["ghosted","ignored","rejected","applied"] as AppStatus[]).map((st, i) => (
+                <button
+                  key={st}
+                  onClick={() => handleBulkStatusUpdate(st)}
+                  disabled={isUpdating}
+                  className={`text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg hover:bg-gray-800 transition-colors ${
+                    i === 1 ? "text-orange-400" : i === 2 ? "text-red-300" : i === 3 ? "text-blue-300" : ""
+                  }`}
+                >
+                  {STATUS_LABELS[st]}
+                </button>
+              ))}
             </div>
           </div>
         </div>
       )}
 
-      <div className="min-h-screen bg-gray-50">
-        <div className="max-w-4xl mx-auto px-4 py-8 pb-32">
-          <div className="flex items-center justify-between mb-6">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+        <div className="max-w-4xl mx-auto px-4 py-5 lg:py-8 pb-32">
+
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">
-                Postulaciones
-              </h1>
-              <p className="text-sm text-gray-500 mt-1 font-medium">
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Postulaciones</h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
                 {apps.length} registro{apps.length !== 1 ? "s" : ""}
               </p>
             </div>
-            <div className="flex gap-2">
-              <Link
-                href="/postulaciones/nueva"
-                className="text-sm bg-green-600 text-white font-bold px-4 py-2 rounded-xl hover:bg-green-700 transition-all shadow-lg shadow-green-100 flex items-center gap-2 active:scale-95"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <line x1="12" y1="5" x2="12" y2="19"></line>
-                  <line x1="5" y1="12" x2="19" y2="12"></line>
-                </svg>
-                Nueva postulación
-              </Link>
-              <Link
-                href="/vacantes"
-                className="text-sm font-bold border border-gray-300 text-gray-400 px-4 py-2 rounded-xl hover:bg-white hover:text-gray-600 transition-all active:scale-95"
-              >
-                Ver vacantes
-              </Link>
-            </div>
+            <Link
+              href="/postulaciones/nueva"
+              className="self-start sm:self-auto text-sm bg-green-600 text-white font-bold px-4 py-2.5 rounded-xl hover:bg-green-700 transition-all flex items-center gap-2 active:scale-95"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              Nueva
+            </Link>
           </div>
 
-          <div className="bg-white border border-gray-200 rounded-2xl p-4 mb-6 flex flex-wrap items-center gap-4 shadow-sm">
-             <div className="flex items-center gap-2 px-3 py-1 border-r border-gray-100 pr-4">
-               <input
-                 type="checkbox"
-                 checked={visible.length > 0 && selectedIds.size === visible.length}
-                 onChange={handleSelectAll}
-                 className="w-5 h-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-               />
-               <span className="text-xs font-bold text-gray-400 uppercase tracking-tighter">
-                 Todos
-               </span>
-             </div>
-
-            <div className="flex-1 min-w-48 relative">
+          {/* Search + sort bar */}
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-3 mb-4 shadow-sm space-y-3">
+            {/* Row 1: checkbox + search */}
+            <div className="flex items-center gap-3">
               <input
-                type="text"
-                placeholder="Buscar por puesto, empresa o recruiter..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full text-sm border-none focus:ring-0 outline-none placeholder:text-gray-300 pr-10"
+                type="checkbox"
+                checked={visible.length > 0 && selectedIds.size === visible.length}
+                onChange={handleSelectAll}
+                className="w-5 h-5 shrink-0 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
               />
-              {search && (
-                <button
-                  onClick={() => setSearch("")}
-                  className="absolute inset-y-0 right-0 pr-2 flex items-center text-gray-300 hover:text-gray-500 transition-colors"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                </button>
-              )}
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  placeholder="Buscar puesto, empresa o recruiter..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full text-sm bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl px-3 py-2 outline-none focus:border-indigo-300 placeholder:text-gray-300 dark:text-gray-200 pr-8 transition-all"
+                />
+                {search && (
+                  <button onClick={() => setSearch("")} className="absolute inset-y-0 right-2 flex items-center text-gray-300 hover:text-gray-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="flex items-center gap-1.5 flex-wrap">
+            {/* Row 2: sort */}
+            <div className="flex gap-1.5">
               {(Object.keys(SORT_LABELS) as SortOption[]).map((s) => (
                 <button
                   key={s}
                   onClick={() => setSort(s)}
                   className={`text-xs px-3 py-1.5 rounded-lg border transition-all ${
                     sort === s
-                      ? "bg-gray-900 text-white border-gray-900 shadow-sm"
-                      : "bg-white text-gray-500 border-gray-200 hover:border-gray-300"
+                      ? "bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 border-gray-900"
+                      : "bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700"
                   }`}
                 >
                   {SORT_LABELS[s]}
@@ -281,13 +242,14 @@ export default function PostulacionesPage() {
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-2 mb-6">
+          {/* Status filter chips — horizontal scroll on mobile */}
+          <div className="flex gap-2 mb-5 overflow-x-auto pb-1 scrollbar-none -mx-4 px-4 lg:mx-0 lg:px-0 lg:flex-wrap">
             <button
               onClick={() => setFilter("all")}
-              className={`text-[10px] uppercase font-black tracking-widest px-4 py-2 rounded-xl transition-all ${
+              className={`text-[10px] uppercase font-black tracking-widest px-3 py-2 rounded-xl transition-all whitespace-nowrap shrink-0 ${
                 filter === "all"
-                  ? "bg-gray-900 text-white shadow-lg shadow-gray-200"
-                  : "bg-white text-gray-400 border border-gray-200 hover:border-gray-300"
+                  ? "bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 shadow-sm"
+                  : "bg-white dark:bg-gray-900 text-gray-400 border border-gray-200 dark:border-gray-700"
               }`}
             >
               Todas ({apps.length})
@@ -296,10 +258,10 @@ export default function PostulacionesPage() {
               <button
                 key={s}
                 onClick={() => setFilter(s)}
-                className={`text-[10px] uppercase font-black tracking-widest px-4 py-2 rounded-xl transition-all ${
+                className={`text-[10px] uppercase font-black tracking-widest px-3 py-2 rounded-xl transition-all whitespace-nowrap shrink-0 ${
                   filter === s
-                    ? "bg-gray-900 text-white shadow-lg shadow-gray-200"
-                    : "bg-white text-gray-400 border border-gray-200 hover:border-gray-300"
+                    ? "bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 shadow-sm"
+                    : "bg-white dark:bg-gray-900 text-gray-400 border border-gray-200 dark:border-gray-700"
                 }`}
               >
                 {STATUS_LABELS[s]} ({counts[s]})
@@ -365,115 +327,105 @@ function AppCard({
   onSelect: () => void;
 }) {
   return (
-    <div 
+    <div
       onClick={onSelect}
-      className={`bg-white border rounded-2xl p-5 hover:shadow-md transition-all cursor-pointer relative flex items-start gap-4 ${
-        selected ? 'border-indigo-600 ring-2 ring-indigo-50 bg-indigo-50/10' : 'border-gray-200'
+      className={`bg-white dark:bg-gray-900 border rounded-2xl p-4 hover:shadow-md transition-all cursor-pointer flex items-start gap-3 ${
+        selected
+          ? "border-indigo-500 ring-2 ring-indigo-50 dark:ring-indigo-950"
+          : "border-gray-200 dark:border-gray-800"
       }`}
     >
-      <div className="pt-1">
-        <div className={`w-5 h-5 rounded border-2 transition-all flex items-center justify-center ${
-          selected ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-gray-300'
+      {/* Checkbox */}
+      <div className="pt-0.5 shrink-0">
+        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+          selected ? "bg-indigo-600 border-indigo-600" : "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600"
         }`}>
           {selected && (
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
           )}
         </div>
       </div>
 
+      {/* Content */}
       <div className="flex-1 min-w-0" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap mb-1">
-              <h3 className="font-bold text-gray-900 text-sm">{app.title}</h3>
-              <span
-                className={`text-[10px] uppercase font-black tracking-widest px-2 py-0.5 rounded-lg ${STATUS_COLORS[app.status]}`}
-              >
-                {STATUS_LABELS[app.status]}
-              </span>
-            </div>
-            <p className="text-xs text-gray-400 font-medium">
-              {app.company}
-              {app.location ? ` · ${app.location}` : ""}
-              {app.recruiterName && (
-                <span className="ml-2 px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded text-[9px] uppercase font-black tracking-widest">
-                  Recruiter: {app.recruiterName}
-                </span>
-              )}
-            </p>
+        {/* Title + badge */}
+        <div className="flex items-start justify-between gap-2 mb-1">
+          <h3 className="font-bold text-gray-900 dark:text-gray-100 text-sm leading-snug">{app.title}</h3>
+          <span className={`shrink-0 text-[10px] uppercase font-black tracking-widest px-2 py-0.5 rounded-lg ${STATUS_COLORS[app.status]}`}>
+            {STATUS_LABELS[app.status]}
+          </span>
+        </div>
 
-            <div className="flex flex-wrap gap-4 mt-4 text-[11px] font-bold text-gray-400 uppercase tracking-tight">
-              <span>
-                Postulado:{" "}
-                <span className="text-gray-900">
-                  {new Date(app.appliedAt).toLocaleDateString("es-AR", {
-                    day: "numeric",
-                    month: "short",
-                    year: "numeric",
-                  })}
-                </span>
-              </span>
-              {app.salaryExpectation && (
-                <span className="text-blue-600 bg-blue-50 px-2 rounded-lg">
-                  Pretensión: {app.currency}{" "}
-                  {app.salaryExpectation.toLocaleString()}
-                </span>
-              )}
-              {app.salaryOffered && (
-                <span className="text-green-600 bg-green-50 px-2 rounded-lg">
-                  Oferta: {app.currency} {app.salaryOffered.toLocaleString()}
-                </span>
-              )}
-            </div>
+        {/* Company + location */}
+        <p className="text-xs text-gray-400 dark:text-gray-500 font-medium truncate">
+          {app.company}{app.location ? ` · ${app.location}` : ""}
+        </p>
 
-            {app.notes && (
-              <p className="mt-3 text-xs text-gray-500 line-clamp-2 bg-gray-50/50 rounded-xl px-4 py-2 border border-gray-100/50 italic leading-relaxed">
-                "{app.notes}"
-              </p>
-            )}
-          </div>
+        {/* Recruiter */}
+        {app.recruiterName && (
+          <span className="inline-block mt-1 px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded text-[9px] uppercase font-black tracking-widest">
+            Recruiter: {app.recruiterName}
+          </span>
+        )}
 
-          <div className="flex items-center gap-2 shrink-0">
-            <Link
-              href={`/postulaciones/${app.id}`}
-              className="text-[11px] font-bold bg-gray-100 text-gray-400 px-4 py-2 rounded-xl hover:bg-gray-200 hover:text-gray-600 transition-all active:scale-95"
+        {/* Meta row */}
+        <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-[11px] font-bold text-gray-400 dark:text-gray-500">
+          <span>
+            Postulado:{" "}
+            <span className="text-gray-700 dark:text-gray-300">
+              {new Date(app.appliedAt).toLocaleDateString("es-AR", { day: "numeric", month: "short", year: "numeric" })}
+            </span>
+          </span>
+          {app.salaryExpectation && (
+            <span className="text-blue-600 bg-blue-50 dark:bg-blue-950/50 px-2 rounded-lg">
+              Pretensión: {app.currency} {app.salaryExpectation.toLocaleString()}
+            </span>
+          )}
+          {app.salaryOffered && (
+            <span className="text-green-600 bg-green-50 dark:bg-green-950/50 px-2 rounded-lg">
+              Oferta: {app.currency} {app.salaryOffered.toLocaleString()}
+            </span>
+          )}
+        </div>
+
+        {/* Notes */}
+        {app.notes && (
+          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 line-clamp-2 bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2 italic leading-relaxed">
+            "{app.notes}"
+          </p>
+        )}
+
+        {/* Actions — full width row on mobile */}
+        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
+          <Link
+            href={`/postulaciones/${app.id}`}
+            className="flex-1 text-center text-[11px] font-bold bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 px-3 py-2 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-700 transition-all active:scale-95"
+          >
+            Ver detalle
+          </Link>
+          {app.applyUrl && (
+            <a
+              href={app.applyUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="flex-1 text-center text-[11px] font-bold border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 px-3 py-2 rounded-xl hover:bg-white dark:hover:bg-gray-800 transition-all active:scale-95"
             >
-              Ver detalle
-            </Link>
-            {app.applyUrl && (
-              <a
-                href={app.applyUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="text-[11px] font-bold border border-gray-200 text-gray-400 px-4 py-2 rounded-xl hover:bg-white hover:text-gray-600 transition-all active:scale-95"
-              >
-                Oferta ↗
-              </a>
-            )}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(app.id);
-              }}
-              className="text-gray-300 hover:text-red-500 transition-all p-2 rounded-xl hover:bg-red-50"
-              title="Eliminar"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="w-4 h-4"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <polyline points="3 6 5 6 21 6"></polyline>
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-              </svg>
-            </button>
-          </div>
+              Oferta ↗
+            </a>
+          )}
+          <button
+            onClick={(e) => { e.stopPropagation(); onDelete(app.id); }}
+            className="w-9 h-9 flex items-center justify-center rounded-xl text-gray-300 dark:text-gray-600 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950 transition-all"
+            title="Eliminar"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            </svg>
+          </button>
         </div>
       </div>
     </div>

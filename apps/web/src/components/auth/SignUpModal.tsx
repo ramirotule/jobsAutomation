@@ -186,7 +186,7 @@ export default function SignUpModal({ isOpen, onClose }: SignUpModalProps) {
                       onClick={() => toggleRole(role)}
                       className={`px-4 py-2 rounded-full text-xs font-bold transition-all border-2 ${
                         selectedRoles.includes(role)
-                          ? "bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-500/30"
+                          ? "bg-indigo-600 border-indigo-600 text-white"
                           : "bg-slate-50 dark:bg-slate-950 border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:border-indigo-300"
                       }`}
                     >

@@ -86,7 +86,7 @@ export default function AuthForm() {
 
           <button
             disabled={loading}
-            className="w-full py-4 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/25 transition-all active:scale-[0.97] disabled:opacity-50 mt-4"
+            className="w-full py-4 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold rounded-xl shadow-lg transition-all active:scale-[0.97] disabled:opacity-50 mt-4"
           >
             {loading ? "Procesando..." : "Iniciar Sesión"}
           </button>

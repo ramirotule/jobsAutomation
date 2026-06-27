@@ -110,8 +110,8 @@ export function ConfirmModal({
             onClick={onConfirm}
             className={`flex-1 text-sm font-bold py-2.5 rounded-xl transition-all ${
               variant === "danger"
-                ? "bg-red-600 text-white hover:bg-red-700 shadow-lg shadow-red-100"
-                : "bg-gray-900 text-white hover:bg-gray-800 shadow-lg shadow-gray-200"
+                ? "bg-red-600 text-white hover:bg-red-700"
+                : "bg-gray-900 text-white hover:bg-gray-800"
             }`}
           >
             {confirmLabel}
