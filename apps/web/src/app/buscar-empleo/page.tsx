@@ -182,14 +182,14 @@ export default function BuscarEmpleoPage() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-          const { data } = await supabase
+          const { data, error } = await supabase
             .from("search_profiles")
-            .select("blacklist_terms, blacklist_threshold, llm_provider, llm_api_key, apify_key, openai_key, anthropic_key, gemini_key, title, primary_skills, secondary_skills")
+            .select("*")
             .eq("user_id", user.id)
             .maybeSingle();
           if (data) setConfig(data as LIUserConfig);
         }
-      } catch { /* ignore */ }
+      } catch (e) { console.error("[config load] catch:", e); }
 
       // Restore ignore list
       const ign = loadIgnored();
@@ -236,13 +236,18 @@ export default function BuscarEmpleoPage() {
       const startRes = await fetch("/api/linkedin-test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "start", searchQuery: query, maxResults }),
+        body: JSON.stringify({
+          action: "start",
+          searchQuery: query,
+          maxResults,
+          token: config?.apify_key,
+        }),
       });
       const startData = await startRes.json();
       if (!startRes.ok) throw new Error(startData.error || "No se pudo iniciar la búsqueda.");
 
       const { runId, datasetId } = startData;
-      setStatus(`Run iniciado (${runId}). Scrapeando...`);
+      setStatus("Buscando trabajos relacionados con tu rol...");
 
       let attempts = 0;
       const poll = async () => {
@@ -256,7 +261,7 @@ export default function BuscarEmpleoPage() {
           const statusRes = await fetch("/api/linkedin-test", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "status", runId, datasetId }),
+            body: JSON.stringify({ action: "status", runId, datasetId, token: config?.apify_key }),
           });
           const statusData = await statusRes.json();
           if (!statusRes.ok) throw new Error(statusData.error);
@@ -297,7 +302,7 @@ export default function BuscarEmpleoPage() {
                 body: JSON.stringify({
                   posts: fil.relevant,
                   provider: config.llm_provider,
-                  apiKey: resolvedKey,
+                  apiKey: resolvedKey?.trim(),
                   profile: { title: config.title, primary_skills: config.primary_skills, secondary_skills: config.secondary_skills },
                 }),
               })
@@ -614,6 +619,7 @@ export default function BuscarEmpleoPage() {
                 <PostCard
                   key={post.id ?? idx}
                   post={post}
+                  config={config}
                   score={(!hasBlacklist || activeTab === "relevant") && post.id ? scores[post.id] : undefined}
                   dimmed={activeTab === "discarded"}
                   selected={selectedIds.has(post.id ?? String(idx))}
@@ -621,6 +627,7 @@ export default function BuscarEmpleoPage() {
                   onIgnore={() => ignorePost(post)}
                   onDelete={() => deletePost(post)}
                   onApply={() => {
+                    ignorePost(post); // never show this post again in searches
                     const postLink = post.linkedinUrl
                       || (post.id ? `https://www.linkedin.com/feed/update/urn:li:activity:${post.id}` : "")
                       || post.url || post.postUrl || "";
@@ -655,10 +662,398 @@ export default function BuscarEmpleoPage() {
   );
 }
 
+// ── Post Modal ────────────────────────────────────────────────────────────────
+function PostModal({
+  post,
+  score: initialScore,
+  config,
+  onClose,
+  onIgnore,
+  onDelete,
+  onApply,
+}: {
+  post: LIPost;
+  score?: { score: number; reason: string };
+  config: LIUserConfig | null;
+  onClose: () => void;
+  onIgnore: () => void;
+  onDelete: () => void;
+  onApply: () => void;
+}) {
+  const [aiScore, setAiScore] = useState<{ score: number; reason: string } | null>(initialScore ?? null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
+  const [contactOpen, setContactOpen] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
+  const [contactEmail, setContactEmail] = useState("");
+
+  const authorName = post.author?.name || "Usuario de LinkedIn";
+  const authorImg = post.author?.avatar?.url || post.author?.profileImage;
+  const authorUrl = post.author?.linkedinUrl || post.author?.profileUrl;
+  const authorInfo = post.author?.info || post.author?.headline || "";
+  const isCompany = post.author?.type === "company";
+  const postText = post.content || post.text || "";
+  const postLink = post.linkedinUrl
+    || (post.id ? `https://www.linkedin.com/feed/update/urn:li:activity:${post.id}` : "")
+    || post.url || post.postUrl || "https://www.linkedin.com";
+  const parsedDate = parseLIDate(post.postedAt ?? post.publishedAt);
+  const displayDate = parsedDate ? formatARDate(parsedDate) : null;
+  const agoText = typeof post.postedAt === "object" ? post.postedAt?.postedAgoShort : null;
+  const likes = post.engagement?.likes ?? 0;
+  const comments = post.engagement?.comments ?? 0;
+  const shares = post.engagement?.shares ?? 0;
+  const firstImage = post.postImages?.[0]?.url;
+
+  // Contact helpers
+  const liVanity = authorUrl?.match(/linkedin\.com\/in\/([^/?#]+)/)?.[1] ?? null;
+  const liDmUrl = liVanity ? `https://www.linkedin.com/messaging/compose/?recipient=${liVanity}` : authorUrl ?? null;
+
+  function openGmail() {
+    if (!contactEmail.trim()) return;
+    const role = config?.title || "desarrollador Frontend";
+    const company = authorName;
+    const subject = encodeURIComponent(`Postulación — ${role}`);
+    const body = encodeURIComponent(
+      `Hola ${company},\n\nVi tu publicación en LinkedIn y me gustaría postularme para el rol de ${role}.\n\nQuedo a disposición para compartir mi CV y coordinar una llamada.\n\nSaludos,`
+    );
+    window.open(`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(contactEmail)}&su=${subject}&body=${body}`, "_blank", "noopener,noreferrer");
+  }
+
+  const scoreValue = aiScore?.score ?? 0;
+  const scoreColor = !aiScore ? "" : scoreValue >= 70 ? "text-green-500 dark:text-green-400" : scoreValue >= 40 ? "text-amber-400" : "text-red-400";
+  const scoreBarColor = !aiScore ? "" : scoreValue >= 70 ? "bg-green-500" : scoreValue >= 40 ? "bg-amber-400" : "bg-red-400";
+
+  const providerKeyMap: Record<string, string | undefined> = {
+    gemini: config?.gemini_key,
+    openai: config?.openai_key,
+    anthropic: config?.anthropic_key,
+    nvidia: config?.llm_api_key,
+  };
+  const availableProviders = Object.entries(providerKeyMap)
+    .filter(([, k]) => k && k.trim().length > 0)
+    .map(([p]) => p);
+  const defaultProvider = config?.llm_provider && providerKeyMap[config.llm_provider]
+    ? config.llm_provider
+    : availableProviders[0] ?? null;
+  const effectiveProvider = selectedProvider ?? defaultProvider;
+  const resolvedKey = effectiveProvider ? providerKeyMap[effectiveProvider] : null;
+  const canAnalyze = !!(resolvedKey && effectiveProvider);
+
+  async function analyze() {
+    setAnalyzeError(null);
+    if (!effectiveProvider) {
+      setAnalyzeError("No tenés un proveedor de IA configurado. Guardá tu API key en Perfil → Tokens.");
+      return;
+    }
+    if (!resolvedKey) {
+      setAnalyzeError(`Falta la API key de ${effectiveProvider}. Configurala en Perfil → Tokens.`);
+      return;
+    }
+    if (!postText.trim()) {
+      setAnalyzeError("Este post no tiene contenido para analizar.");
+      return;
+    }
+    setAnalyzing(true);
+    try {
+      const res = await fetch("/api/linkedin-score", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          posts: [{ id: post.id, text: postText }],
+          provider: effectiveProvider!,
+          apiKey: resolvedKey?.trim(),
+          profile: {
+            title: config?.title,
+            primary_skills: config?.primary_skills,
+            secondary_skills: config?.secondary_skills,
+            blacklist_terms: config?.blacklist_terms,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      const s = data.scores?.[0];
+      if (s) setAiScore({ score: s.score, reason: s.reason });
+    } catch (e: any) {
+      setAnalyzeError(e.message);
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", handler);
+      document.body.style.overflow = "";
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-2xl max-h-[90vh] flex flex-col bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-start gap-3 px-5 pt-5 pb-4 border-b border-gray-100 dark:border-gray-800 shrink-0">
+          <div className="shrink-0 relative">
+            {authorImg ? (
+              <img src={authorImg} alt={authorName}
+                className={`w-12 h-12 object-cover border border-gray-100 dark:border-gray-700 ${isCompany ? "rounded-lg" : "rounded-full"}`}
+                onError={e => { (e.target as HTMLImageElement).src = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(authorName)}`; }} />
+            ) : (
+              <div className={`w-12 h-12 bg-indigo-50 dark:bg-indigo-950 text-indigo-500 font-bold flex items-center justify-center text-sm ${isCompany ? "rounded-lg" : "rounded-full"}`}>
+                {authorName.slice(0, 2).toUpperCase()}
+              </div>
+            )}
+            <span className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold border border-white dark:border-gray-900 ${isCompany ? "bg-blue-500 text-white" : "bg-violet-500 text-white"}`}>
+              {isCompany ? "E" : "P"}
+            </span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-gray-900 dark:text-gray-100 text-sm">
+              {authorUrl
+                ? <a href={authorUrl} target="_blank" rel="noopener noreferrer" className="hover:text-indigo-600 dark:hover:text-indigo-400">{authorName}</a>
+                : authorName}
+            </p>
+            {authorInfo && <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{authorInfo}</p>}
+            <div className="flex items-center gap-2 mt-1 text-xs text-gray-400 dark:text-gray-500">
+              {agoText && <span className="font-medium">{agoText}</span>}
+              {agoText && displayDate && <span>·</span>}
+              {displayDate && <span>{displayDate}</span>}
+              {likes > 0 && <span className="ml-1">👍 {likes}</span>}
+              {comments > 0 && <span>💬 {comments}</span>}
+              {shares > 0 && <span>🔁 {shares}</span>}
+            </div>
+          </div>
+          <button onClick={onClose}
+            className="shrink-0 w-8 h-8 flex items-center justify-center rounded-xl text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+
+        {/* Content — scrollable */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          <p className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed whitespace-pre-wrap break-words">
+            {postText || <span className="text-gray-400 italic">Sin contenido</span>}
+          </p>
+
+          {/* Contact section */}
+          <div className="border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden">
+            <button
+              onClick={() => setContactOpen(o => !o)}
+              className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            >
+              <span className="flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+                Contactar
+              </span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                className={`transition-transform duration-200 ${contactOpen ? "rotate-180" : ""}`}>
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </button>
+
+            {contactOpen && (
+              <div className="px-4 pb-4 pt-1 space-y-3 border-t border-gray-100 dark:border-gray-800">
+                {/* LinkedIn DM */}
+                {liDmUrl && (
+                  <a
+                    href={liDmUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 w-full px-4 py-2.5 rounded-xl border border-[#0a66c2]/30 dark:border-[#0a66c2]/40 bg-[#0a66c2]/5 dark:bg-[#0a66c2]/10 text-[#0a66c2] dark:text-[#5b9fd4] text-sm font-semibold hover:bg-[#0a66c2]/10 dark:hover:bg-[#0a66c2]/20 transition-colors"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                    </svg>
+                    Enviar mensaje en LinkedIn
+                    {liVanity && <span className="ml-auto text-xs opacity-60">@{liVanity}</span>}
+                  </a>
+                )}
+
+                {/* Gmail */}
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <input
+                      type="email"
+                      value={contactEmail}
+                      onChange={e => setContactEmail(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter") openGmail(); }}
+                      placeholder="Email del recruiter"
+                      className="flex-1 text-sm px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:border-red-400 focus:ring-1 focus:ring-red-100 outline-none transition-all"
+                    />
+                    <button
+                      onClick={openGmail}
+                      disabled={!contactEmail.trim()}
+                      className="shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-xl bg-red-500 hover:bg-red-600 disabled:opacity-40 text-white text-sm font-bold transition-colors active:scale-95"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z"/>
+                      </svg>
+                      Gmail
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-gray-400 dark:text-gray-500">
+                    Abre Gmail con asunto y cuerpo prellenados. Solo tocás Enviar.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+        </div>
+
+        {/* ── AI result / error — floating overlay centrado en el modal ── */}
+        {(aiScore || analyzeError) && (
+          <div className="absolute inset-0 flex items-center justify-center p-6 pointer-events-none z-10">
+            <div className="pointer-events-auto w-full max-w-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-2xl p-5 space-y-4">
+
+              {/* close */}
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500">
+                  {analyzeError ? "Error" : "Resultado IA"}
+                </span>
+                <button
+                  onClick={() => { setAiScore(null); setAnalyzeError(null); }}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
+              </div>
+
+              {analyzeError && (
+                <div className="space-y-3">
+                  <p className="text-sm text-red-600 dark:text-red-400 leading-relaxed">{analyzeError}</p>
+                  <a
+                    href="/perfil?tab=tokens"
+                    className="flex items-center justify-center gap-2 w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold transition-colors"
+                  >
+                    Ir a configurar tokens →
+                  </a>
+                </div>
+              )}
+
+              {aiScore && (
+                <>
+                  <div className="flex items-center gap-4">
+                    <span className={`font-black text-5xl leading-none tabular-nums ${scoreColor}`}>{aiScore.score}</span>
+                    <div className="flex-1 space-y-1.5">
+                      <div className="flex justify-between text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                        <span>Match</span><span>/100</span>
+                      </div>
+                      <div className="w-full h-2.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full transition-all duration-700 ${scoreBarColor}`} style={{ width: `${aiScore.score}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">{aiScore.reason}</p>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Footer actions */}
+        <div className="shrink-0 border-t border-gray-100 dark:border-gray-800 px-5 py-4 flex flex-col gap-2">
+          {availableProviders.length > 1 && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">Modelo:</span>
+              <div className="flex gap-1 flex-wrap">
+                {availableProviders.map(p => (
+                  <button
+                    key={p}
+                    onClick={() => setSelectedProvider(p)}
+                    className={`text-xs px-2.5 py-1 rounded-lg font-medium border transition-all ${
+                      effectiveProvider === p
+                        ? "bg-indigo-600 text-white border-indigo-600"
+                        : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-indigo-400"
+                    }`}
+                  >
+                    {p === "nvidia" ? "Nvidia / Gemma 4" : p === "gemini" ? "Gemini" : p === "openai" ? "OpenAI" : "Anthropic"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="flex gap-2">
+          {/* AI Analyze button */}
+          <button
+            onClick={analyze}
+            disabled={analyzing}
+            className="flex-1 flex items-center justify-center gap-2 text-sm font-bold py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-60 text-white transition-all active:scale-95"
+          >
+            {analyzing ? (
+              <>
+                <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                </svg>
+                Analizando...
+              </>
+            ) : (
+              <>
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2L9.5 9.5 2 12l7.5 2.5L12 22l2.5-7.5L22 12l-7.5-2.5z"/>
+                </svg>
+                {aiScore ? "Re-analizar" : "Analizar con IA"}
+              </>
+            )}
+          </button>
+
+          <button onClick={() => { onApply(); onClose(); }}
+            className="flex-1 text-sm font-bold py-2.5 rounded-xl bg-gray-900 dark:bg-gray-700 text-white hover:bg-indigo-600 transition-all active:scale-95">
+            Postular →
+          </button>
+
+          <a href={postLink} target="_blank" rel="noopener noreferrer"
+            className="w-10 flex items-center justify-center rounded-xl border border-gray-200 dark:border-gray-700 text-[#0a66c2] dark:text-[#5b9fd4] hover:bg-blue-50 dark:hover:bg-blue-950 transition-all"
+            title="Ver en LinkedIn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+            </svg>
+          </a>
+
+          <button onClick={() => { onIgnore(); onClose(); }}
+            className="w-10 flex items-center justify-center rounded-xl border border-gray-200 dark:border-gray-700 text-gray-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
+            title="Ignorar para siempre">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+              <line x1="1" y1="1" x2="23" y2="23"/>
+            </svg>
+          </button>
+          <button onClick={() => { onDelete(); onClose(); }}
+            className="w-10 flex items-center justify-center rounded-xl border border-gray-200 dark:border-gray-700 text-gray-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 transition-all"
+            title="Eliminar">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+          </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Post Card ─────────────────────────────────────────────────────────────────
 function PostCard({
   post,
   score,
+  config,
   dimmed = false,
   selected = false,
   onToggleSelect,
@@ -668,6 +1063,7 @@ function PostCard({
 }: {
   post: LIPost;
   score?: { score: number; reason: string };
+  config: LIUserConfig | null;
   dimmed?: boolean;
   selected?: boolean;
   onToggleSelect?: () => void;
@@ -676,6 +1072,7 @@ function PostCard({
   onApply: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
 
   const authorName = post.author?.name || "Usuario de LinkedIn";
   const authorImg = post.author?.avatar?.url || post.author?.profileImage;
@@ -709,24 +1106,26 @@ function PostCard({
   const firstImage = post.postImages?.[0]?.url;
 
   return (
-    <div className={`relative bg-white dark:bg-gray-900 border rounded-2xl flex flex-col transition-all hover:shadow-md overflow-hidden ${selected ? "border-indigo-400 ring-2 ring-indigo-100 dark:ring-indigo-900 shadow-sm" : dimmed ? "opacity-40 border-gray-200 dark:border-gray-800" : "border-gray-200 dark:border-gray-800 hover:border-indigo-200 dark:hover:border-indigo-700"}`}>
-
-      {/* Image banner (if post has image) */}
-      {firstImage && (
-        <div className="w-full h-36 overflow-hidden shrink-0 bg-gray-100 dark:bg-gray-800">
-          <img
-            src={firstImage}
-            alt=""
-            className="w-full h-full object-cover"
-            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-          />
-        </div>
-      )}
+    <>
+    {modalOpen && (
+      <PostModal
+        post={post}
+        score={score}
+        config={config}
+        onClose={() => setModalOpen(false)}
+        onIgnore={onIgnore}
+        onDelete={onDelete}
+        onApply={onApply}
+      />
+    )}
+    <div
+      onClick={() => setModalOpen(true)}
+      className={`relative bg-white dark:bg-gray-900 border rounded-2xl flex flex-col transition-all hover:shadow-md overflow-hidden cursor-pointer ${selected ? "border-indigo-400 ring-2 ring-indigo-100 dark:ring-indigo-900 shadow-sm" : dimmed ? "opacity-40 border-gray-200 dark:border-gray-800" : "border-gray-200 dark:border-gray-800 hover:border-indigo-200 dark:hover:border-indigo-700"}`}>
 
       <div className="p-5 flex flex-col gap-3 flex-1">
         {/* Checkbox (top-left) */}
         <button
-          onClick={onToggleSelect}
+          onClick={e => { e.stopPropagation(); onToggleSelect?.(); }}
           className={`absolute top-3 left-3 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all z-10 ${selected ? "bg-indigo-600 border-indigo-600" : "bg-white/90 dark:bg-gray-800 border-gray-300 dark:border-gray-600 hover:border-indigo-400"}`}
           title={selected ? "Deseleccionar" : "Seleccionar"}
         >
@@ -740,7 +1139,7 @@ function PostCard({
         {/* Ignore + Delete buttons stacked top-right */}
         <div className="absolute top-2.5 right-2.5 flex flex-col gap-1.5 z-10">
           <button
-            onClick={onIgnore}
+            onClick={e => { e.stopPropagation(); onIgnore(); }}
             className="w-9 h-9 flex items-center justify-center rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:text-slate-700 dark:hover:text-slate-200 hover:border-slate-400 dark:hover:border-slate-500 shadow-sm transition-all active:scale-95"
             title="Ignorar para siempre"
           >
@@ -750,7 +1149,7 @@ function PostCard({
             </svg>
           </button>
           <button
-            onClick={onDelete}
+            onClick={e => { e.stopPropagation(); onDelete(); }}
             className="w-9 h-9 flex items-center justify-center rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 hover:border-red-300 dark:hover:border-red-700 hover:bg-red-50 dark:hover:bg-red-950 shadow-sm transition-all active:scale-95"
             title="Eliminar de esta búsqueda"
           >
@@ -874,12 +1273,13 @@ function PostCard({
               href={postLink}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={e => e.stopPropagation()}
               className="flex-1 text-center text-[11px] font-bold py-2.5 rounded-xl bg-[#0a66c2] text-white hover:bg-[#004182] transition-all shadow-sm active:scale-95"
             >
               Ver empleo
             </a>
             <button
-              onClick={onApply}
+              onClick={e => { e.stopPropagation(); onApply(); }}
               className="flex-1 text-[11px] font-bold py-2.5 rounded-xl bg-gray-900 dark:bg-gray-700 text-white hover:bg-indigo-600 dark:hover:bg-indigo-600 transition-all shadow-sm active:scale-95"
             >
               Postular →
@@ -888,5 +1288,6 @@ function PostCard({
         </div>
       </div>
     </div>
+    </>
   );
 }

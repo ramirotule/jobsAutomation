@@ -179,7 +179,7 @@ export default function PostulacionDetailPage() {
                   type="datetime-local"
                   value={form.interviewAt}
                   onChange={(e) => set("interviewAt", e.target.value)}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none transition-all"
+                  className="w-full border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none transition-all"
                 />
               </div>
 
@@ -213,7 +213,7 @@ export default function PostulacionDetailPage() {
         </Link>
 
         {/* Header / Basic Info */}
-        <div className="bg-white border border-gray-200 rounded-2xl p-6 mb-4 shadow-sm">
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-6 mb-4">
           <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">
             Información de la Vacante
           </h2>
@@ -224,7 +224,7 @@ export default function PostulacionDetailPage() {
                 type="text"
                 value={form.title}
                 onChange={(e) => set("title", e.target.value)}
-                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 font-semibold"
+                className="w-full text-sm border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 rounded-lg px-3 py-2 font-semibold"
               />
             </div>
             <div className="space-y-1">
@@ -233,7 +233,7 @@ export default function PostulacionDetailPage() {
                 type="text"
                 value={form.company}
                 onChange={(e) => set("company", e.target.value)}
-                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2"
+                className="w-full text-sm border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 rounded-lg px-3 py-2"
               />
             </div>
             <div className="space-y-1">
@@ -242,7 +242,7 @@ export default function PostulacionDetailPage() {
                 type="text"
                 value={form.location}
                 onChange={(e) => set("location", e.target.value)}
-                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2"
+                className="w-full text-sm border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 rounded-lg px-3 py-2"
               />
             </div>
             <div className="space-y-1">
@@ -253,7 +253,7 @@ export default function PostulacionDetailPage() {
                 type="datetime-local"
                 value={form.appliedAt}
                 onChange={(e) => set("appliedAt", e.target.value)}
-                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2"
+                className="w-full text-sm border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 rounded-lg px-3 py-2"
               />
             </div>
             <div className="md:col-span-2 space-y-1">
@@ -263,7 +263,7 @@ export default function PostulacionDetailPage() {
                   type="url"
                   value={form.applyUrl}
                   onChange={(e) => set("applyUrl", e.target.value)}
-                  className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2"
+                  className="flex-1 text-sm border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 rounded-lg px-3 py-2"
                 />
                 {form.applyUrl && (
                   <a
@@ -282,7 +282,7 @@ export default function PostulacionDetailPage() {
 
         {/* Interview Schedule (New Section) */}
         {app.status === "interview" && (
-          <div className="bg-purple-50 border border-purple-100 rounded-2xl p-6 mb-4 shadow-sm">
+          <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-100 dark:border-purple-900 rounded-2xl p-6 mb-4">
             <div className="flex items-start justify-between">
               <div>
                 <h2 className="text-xs font-bold text-purple-600 uppercase tracking-wide mb-2 flex items-center gap-1">
@@ -335,7 +335,7 @@ export default function PostulacionDetailPage() {
         )}
 
         {/* Recruiter & Contact */}
-        <div className="bg-white border border-gray-200 rounded-2xl p-6 mb-4 shadow-sm">
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-6 mb-4">
           <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">
             Contacto
           </h2>
@@ -349,7 +349,7 @@ export default function PostulacionDetailPage() {
                 value={form.recruiterName}
                 onChange={(e) => set("recruiterName", e.target.value)}
                 placeholder="Nombre del contacto"
-                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2"
+                className="w-full text-sm border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 rounded-lg px-3 py-2"
               />
             </div>
             <div className="space-y-1">
@@ -362,7 +362,7 @@ export default function PostulacionDetailPage() {
                   value={form.recruiterLinkedin}
                   onChange={(e) => set("recruiterLinkedin", e.target.value)}
                   placeholder="https://linkedin.com/in/..."
-                  className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2"
+                  className="flex-1 text-sm border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 rounded-lg px-3 py-2"
                 />
                 {form.recruiterLinkedin && (
                   <a
@@ -383,7 +383,7 @@ export default function PostulacionDetailPage() {
               <select
                 value={form.contactType}
                 onChange={(e) => set("contactType", e.target.value)}
-                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white"
+                className="w-full text-sm border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 rounded-lg px-3 py-2 bg-white dark:bg-gray-800"
               >
                 <option value="self_initiated">Por mi parte</option>
                 <option value="recruiter_initiated">
@@ -395,7 +395,7 @@ export default function PostulacionDetailPage() {
         </div>
 
         {/* Status */}
-        <div className="bg-white border border-gray-200 rounded-2xl p-6 mb-4 shadow-sm">
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-6 mb-4">
           <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
             Estado del Proceso
           </h2>
@@ -426,7 +426,7 @@ export default function PostulacionDetailPage() {
         </div>
 
         {/* Salary */}
-        <div className="bg-white border border-gray-200 rounded-2xl p-6 mb-4 shadow-sm">
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-6 mb-4">
           <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">
             Compensación
           </h2>
@@ -472,7 +472,7 @@ export default function PostulacionDetailPage() {
                     set("salaryExpectation", formatAmount(e.target.value));
                   }}
                   placeholder="Ingrese el monto..."
-                  className="w-full text-sm border border-gray-200 rounded-lg pl-16 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                  className="w-full text-sm border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 rounded-lg pl-16 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                 />
               </div>
             </div>
@@ -498,7 +498,7 @@ export default function PostulacionDetailPage() {
                     set("salaryOffered", formatAmount(e.target.value));
                   }}
                   placeholder="Ingrese el monto..."
-                  className="w-full text-sm border border-gray-200 rounded-lg pl-16 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                  className="w-full text-sm border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 rounded-lg pl-16 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                 />
               </div>
             </div>
@@ -506,7 +506,7 @@ export default function PostulacionDetailPage() {
         </div>
 
         {/* Benefits & Notes (keep same as before but styled a bit more) */}
-        <div className="bg-white border border-gray-200 rounded-2xl p-6 mb-4 shadow-sm">
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-6 mb-4">
           <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
             Beneficios
           </h2>

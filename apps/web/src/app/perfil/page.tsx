@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import type { Seniority, Modality } from "@/types";
 import { searchITTerms, type ITTerm } from "@/lib/it-terms-dictionary";
@@ -31,8 +32,9 @@ const DEFAULT_FORM: ProfileForm = {
   alert_score_threshold: 75,
 };
 
-export default function PerfilPage() {
+function PerfilPageContent() {
   const supabase = createClient();
+  const searchParams = useSearchParams();
   const [form, setForm] = useState<ProfileForm>(DEFAULT_FORM);
   const [cvText, setCvText] = useState("");
   const [saving, setSaving] = useState(false);
@@ -41,18 +43,25 @@ export default function PerfilPage() {
   const [savedProfile, setSavedProfile] = useState(false);
   const [savedCv, setSavedCv] = useState(false);
   const [savedKit, setSavedKit] = useState(false);
-  const [activeTab, setActiveTab] = useState<"perfil" | "cv" | "kit" | "cuenta" | "tokens">("perfil");
+
+  const validTabs = ["perfil", "cv", "kit", "cuenta", "tokens"] as const;
+  type Tab = typeof validTabs[number];
+  const initialTab = (validTabs as readonly string[]).includes(searchParams.get("tab") ?? "")
+    ? (searchParams.get("tab") as Tab)
+    : "perfil";
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
 
   // Blacklist & LLM config
   const [blacklistTerms, setBlacklistTerms] = useState<string[]>([]);
   const [blacklistThreshold, setBlacklistThreshold] = useState(2);
-  const [llmProvider, setLlmProvider] = useState<"gemini" | "openai" | "anthropic">("gemini");
+  const [llmProvider, setLlmProvider] = useState<"gemini" | "openai" | "anthropic" | "nvidia">("gemini");
 
   // API Tokens
   const [apifyKey, setApifyKey] = useState("");
   const [openaiKey, setOpenaiKey] = useState("");
   const [anthropicKey, setAnthropicKey] = useState("");
   const [geminiKey, setGeminiKey] = useState("");
+  const [nvidiaKey, setNvidiaKey] = useState("");
   const [savingTokens, setSavingTokens] = useState(false);
 
   // User metadata state
@@ -132,6 +141,7 @@ export default function PerfilPage() {
       setOpenaiKey(searchProfile.openai_key ?? "");
       setAnthropicKey(searchProfile.anthropic_key ?? "");
       setGeminiKey(searchProfile.gemini_key ?? "");
+      setNvidiaKey(searchProfile.llm_api_key ?? "");
     }
 
     // Load CV
@@ -220,6 +230,9 @@ export default function PerfilPage() {
       openai_key: openaiKey,
       anthropic_key: anthropicKey,
       gemini_key: geminiKey,
+      llm_api_key: nvidiaKey,
+      // keep llm_provider in sync: set a sensible default if not yet chosen
+      llm_provider: llmProvider || (nvidiaKey ? "nvidia" : geminiKey ? "gemini" : openaiKey ? "openai" : anthropicKey ? "anthropic" : "gemini"),
     };
 
     try {
@@ -491,12 +504,13 @@ export default function PerfilPage() {
               <Field label="Proveedor">
                 <select
                   value={llmProvider}
-                  onChange={(e) => setLlmProvider(e.target.value as "gemini" | "openai" | "anthropic")}
+                  onChange={(e) => setLlmProvider(e.target.value as "gemini" | "openai" | "anthropic" | "nvidia")}
                   className={inputCls}
                 >
                   <option value="gemini">Google Gemini</option>
                   <option value="openai">OpenAI</option>
                   <option value="anthropic">Anthropic</option>
+                  <option value="nvidia">Nvidia NIM (Gemma 4)</option>
                 </select>
               </Field>
             </div>
@@ -534,6 +548,11 @@ export default function PerfilPage() {
                 provider="gemini"
                 value={geminiKey}
                 onChange={setGeminiKey}
+              />
+              <TokenCard
+                provider="nvidia"
+                value={nvidiaKey}
+                onChange={setNvidiaKey}
               />
             </div>
             <div className="pt-2">
@@ -637,13 +656,21 @@ export default function PerfilPage() {
         )}
       </div>
 
-      <PasswordModal 
-        isOpen={isPasswordModalOpen} 
-        onClose={() => setIsPasswordModalOpen(false)} 
+      <PasswordModal
+        isOpen={isPasswordModalOpen}
+        onClose={() => setIsPasswordModalOpen(false)}
         userEmail={userEmail}
         showToast={showToast}
       />
     </div>
+  );
+}
+
+export default function PerfilPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-50 dark:bg-gray-950" />}>
+      <PerfilPageContent />
+    </Suspense>
   );
 }
 
@@ -981,6 +1008,21 @@ const TOKEN_PROVIDERS = {
           </linearGradient>
         </defs>
         <path d="M20 9C20 9 20 20 9 20C20 20 20 31 20 31C20 31 20 20 31 20C20 20 20 9 20 9Z" fill="white" />
+      </svg>
+    ),
+  },
+  nvidia: {
+    name: "Nvidia NIM",
+    description: "Gemma 4 31B vía Nvidia NIM. Gratis con API key de build.nvidia.com.",
+    placeholder: "nvapi-...",
+    accent: "#76B900",
+    bg: "#F2FFE0",
+    border: "#C8F090",
+    docsUrl: "https://build.nvidia.com/google/gemma-4-31b-it",
+    logo: (
+      <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-7 h-7">
+        <rect width="40" height="40" rx="8" fill="#76B900" />
+        <text x="8" y="27" fontSize="14" fontWeight="bold" fill="white" fontFamily="monospace">NV</text>
       </svg>
     ),
   },

@@ -33,7 +33,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Falta el término de búsqueda (searchQuery)' }, { status: 400 })
       }
 
-      const limit = Math.min(Math.max(1, Number(maxResults) || 10), 50)
+      const limit = Math.min(Math.max(1, Number(maxResults) || 10), 200)
       const apifyStartUrl = `https://api.apify.com/v2/actors/harvestapi~linkedin-post-search/runs?token=${encodeURIComponent(activeToken)}`
 
       const response = await fetch(apifyStartUrl, {
