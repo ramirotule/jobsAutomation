@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/utils/supabase/client";
 import type { Seniority, Modality } from "@/types";
+import { searchITTerms, type ITTerm } from "@/lib/it-terms-dictionary";
 
 interface ProfileForm {
   title: string;
@@ -40,8 +41,20 @@ export default function PerfilPage() {
   const [savedProfile, setSavedProfile] = useState(false);
   const [savedCv, setSavedCv] = useState(false);
   const [savedKit, setSavedKit] = useState(false);
-  const [activeTab, setActiveTab] = useState<"perfil" | "cv" | "kit" | "cuenta" | "links">("perfil");
-  
+  const [activeTab, setActiveTab] = useState<"perfil" | "cv" | "kit" | "cuenta" | "tokens">("perfil");
+
+  // Blacklist & LLM config
+  const [blacklistTerms, setBlacklistTerms] = useState<string[]>([]);
+  const [blacklistThreshold, setBlacklistThreshold] = useState(2);
+  const [llmProvider, setLlmProvider] = useState<"gemini" | "openai" | "anthropic">("gemini");
+
+  // API Tokens
+  const [apifyKey, setApifyKey] = useState("");
+  const [openaiKey, setOpenaiKey] = useState("");
+  const [anthropicKey, setAnthropicKey] = useState("");
+  const [geminiKey, setGeminiKey] = useState("");
+  const [savingTokens, setSavingTokens] = useState(false);
+
   // User metadata state
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -111,6 +124,14 @@ export default function PerfilPage() {
         min_score_threshold: searchProfile.min_score_threshold ?? 60,
         alert_score_threshold: searchProfile.alert_score_threshold ?? 75,
       });
+      setBlacklistTerms(searchProfile.blacklist_terms ?? []);
+      setBlacklistThreshold(searchProfile.blacklist_threshold ?? 2);
+      setLlmProvider(searchProfile.llm_provider ?? "gemini");
+      // Tokens
+      setApifyKey(searchProfile.apify_key ?? "");
+      setOpenaiKey(searchProfile.openai_key ?? "");
+      setAnthropicKey(searchProfile.anthropic_key ?? "");
+      setGeminiKey(searchProfile.gemini_key ?? "");
     }
 
     // Load CV
@@ -154,6 +175,9 @@ export default function PerfilPage() {
       years_experience: form.years_experience,
       min_score_threshold: form.min_score_threshold,
       alert_score_threshold: form.alert_score_threshold,
+      blacklist_terms: blacklistTerms,
+      blacklist_threshold: blacklistThreshold,
+      llm_provider: llmProvider,
       is_active: true,
     };
 
@@ -175,6 +199,40 @@ export default function PerfilPage() {
       showToast(e.message, 'error');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function saveTokens() {
+    setSavingTokens(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data: existing } = await supabase
+      .from("search_profiles")
+      .select("id")
+      .eq("user_id", user.id)
+      .limit(1)
+      .maybeSingle();
+
+    const tokenPayload = {
+      user_id: user.id,
+      apify_key: apifyKey,
+      openai_key: openaiKey,
+      anthropic_key: anthropicKey,
+      gemini_key: geminiKey,
+    };
+
+    try {
+      if (existing) {
+        await supabase.from("search_profiles").update(tokenPayload).eq("id", existing.id);
+      } else {
+        await supabase.from("search_profiles").insert({ ...tokenPayload, is_active: true });
+      }
+      showToast("Tokens guardados");
+    } catch (e: any) {
+      showToast(e.message, "error");
+    } finally {
+      setSavingTokens(false);
     }
   }
 
@@ -295,6 +353,7 @@ export default function PerfilPage() {
           {[
             { key: "cuenta", label: "Mi Cuenta" },
             { key: "perfil", label: "Criterios" },
+            { key: "tokens", label: "Tokens" },
             { key: "cv", label: "Mi CV" },
             { key: "kit", label: "Kit Postulación" },
           ].map((tab) => (
@@ -414,9 +473,104 @@ export default function PerfilPage() {
                 <input value={form.location} onChange={set("location")} className={inputCls} />
               </Field>
             </div>
+            {/* Blacklist */}
+            <div className="border-t border-slate-100 pt-5 space-y-4">
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Filtro de Posts LinkedIn</h3>
+                <p className="text-[11px] text-slate-400">
+                  Posts con {blacklistThreshold} o más apariciones de estos términos serán descartados. Los que tengan menos irán a "A revisar".
+                </p>
+              </div>
+              <Field label="Lista negra de términos" hint="Escribí y presioná Enter, o elegí una sugerencia">
+                <TagInput
+                  tags={blacklistTerms}
+                  onAdd={(tag) => setBlacklistTerms((prev) => [...prev, tag])}
+                  onRemove={(tag) => setBlacklistTerms((prev) => prev.filter((t) => t !== tag))}
+                  placeholder="Ej: AWS, Java, backend..."
+                />
+              </Field>
+              <Field label="Umbral para descartar (N apariciones)" hint="Default: 2">
+                <input
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={blacklistThreshold}
+                  onChange={(e) => setBlacklistThreshold(Number(e.target.value))}
+                  className={inputCls}
+                />
+              </Field>
+            </div>
+
+            {/* LLM Scoring */}
+            <div className="border-t border-slate-100 pt-5 space-y-4">
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Scoring con IA</h3>
+                <p className="text-[11px] text-slate-400">
+                  Los posts que pasen el filtro recibirán un score de match. Configurá las API keys en la tab{" "}
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("tokens")}
+                    className="text-indigo-500 font-bold underline underline-offset-2"
+                  >
+                    Tokens
+                  </button>.
+                </p>
+              </div>
+              <Field label="Proveedor">
+                <select
+                  value={llmProvider}
+                  onChange={(e) => setLlmProvider(e.target.value as "gemini" | "openai" | "anthropic")}
+                  className={inputCls}
+                >
+                  <option value="gemini">Google Gemini</option>
+                  <option value="openai">OpenAI</option>
+                  <option value="anthropic">Anthropic</option>
+                </select>
+              </Field>
+            </div>
+
             <div className="pt-2">
               <button onClick={saveProfile} disabled={saving} className="bg-indigo-600 text-white text-sm px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-lg shadow-indigo-200">
                 {saving ? "Guardando..." : "Guardar Criterios"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "tokens" && (
+          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <p className="text-xs text-slate-400">
+              Tus API keys se guardan en tu perfil y se usan para el scoring automático y las búsquedas. Nunca se comparten.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <TokenCard
+                provider="apify"
+                value={apifyKey}
+                onChange={setApifyKey}
+              />
+              <TokenCard
+                provider="openai"
+                value={openaiKey}
+                onChange={setOpenaiKey}
+              />
+              <TokenCard
+                provider="anthropic"
+                value={anthropicKey}
+                onChange={setAnthropicKey}
+              />
+              <TokenCard
+                provider="gemini"
+                value={geminiKey}
+                onChange={setGeminiKey}
+              />
+            </div>
+            <div className="pt-2">
+              <button
+                onClick={saveTokens}
+                disabled={savingTokens}
+                className="bg-indigo-600 text-white text-sm px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-lg shadow-indigo-200"
+              >
+                {savingTokens ? "Guardando..." : "Guardar Tokens"}
               </button>
             </div>
           </div>
@@ -678,6 +832,280 @@ function LinkCard({ icon, label, url, isCopied, onCopy }: { icon: string, label:
       </p>
     </div>
   )
+}
+
+function TagInput({
+  tags,
+  onAdd,
+  onRemove,
+  placeholder,
+}: {
+  tags: string[];
+  onAdd: (tag: string) => void;
+  onRemove: (tag: string) => void;
+  placeholder?: string;
+}) {
+  const [input, setInput] = useState("");
+  const [suggestions, setSuggestions] = useState<ITTerm[]>([]);
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  function handleInput(value: string) {
+    setInput(value);
+    const results = searchITTerms(value);
+    setSuggestions(results);
+    setOpen(results.length > 0);
+  }
+
+  function addTag(label: string) {
+    const trimmed = label.trim();
+    if (trimmed && !tags.includes(trimmed)) {
+      onAdd(trimmed);
+    }
+    setInput("");
+    setSuggestions([]);
+    setOpen(false);
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter" && input.trim()) {
+      e.preventDefault();
+      addTag(input);
+    } else if (e.key === "Backspace" && !input && tags.length > 0) {
+      onRemove(tags[tags.length - 1]);
+    } else if (e.key === "Escape") {
+      setOpen(false);
+    }
+  }
+
+  return (
+    <div ref={wrapperRef} className="space-y-2">
+      {tags.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {tags.map((tag) => (
+            <span
+              key={tag}
+              className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs font-semibold"
+            >
+              {tag}
+              <button
+                type="button"
+                onClick={() => onRemove(tag)}
+                className="ml-0.5 text-red-400 hover:text-red-600 transition-colors leading-none"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="relative">
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => handleInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onFocus={() => input.length >= 2 && setOpen(suggestions.length > 0)}
+          placeholder={placeholder}
+          className={inputCls}
+        />
+        {open && suggestions.length > 0 && (
+          <div className="absolute z-20 top-full mt-1 left-0 w-full bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+            {suggestions.map((s) => (
+              <button
+                key={s.label}
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  addTag(s.label);
+                }}
+                className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-indigo-50 transition-colors text-left"
+              >
+                <span className="text-sm text-slate-800 font-medium">{s.label}</span>
+                <span className="text-[10px] text-slate-400 uppercase tracking-wider">{s.category}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Token providers config ────────────────────────────────────────────────────
+const TOKEN_PROVIDERS = {
+  apify: {
+    name: "Apify",
+    description: "Web scraping & automation. Usado para buscar posts en LinkedIn.",
+    placeholder: "apify_api_...",
+    accent: "#FF7518",
+    bg: "#FFF4EC",
+    border: "#FFD4AC",
+    docsUrl: "https://console.apify.com/account/integrations",
+    logo: (
+      <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-7 h-7">
+        <rect width="40" height="40" rx="8" fill="#FF7518" />
+        <path d="M20 8L30 28H10L20 8Z" fill="white" />
+        <rect x="14" y="22" width="12" height="3" rx="1.5" fill="#FF7518" />
+      </svg>
+    ),
+  },
+  openai: {
+    name: "OpenAI",
+    description: "GPT-4 / GPT-4o para scoring de vacantes y análisis de CV.",
+    placeholder: "sk-proj-...",
+    accent: "#10a37f",
+    bg: "#F0FDF9",
+    border: "#A7F3D0",
+    docsUrl: "https://platform.openai.com/api-keys",
+    logo: (
+      <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-7 h-7">
+        <rect width="40" height="40" rx="8" fill="#10a37f" />
+        <path d="M20 10C14.477 10 10 14.477 10 20C10 25.523 14.477 30 20 30C25.523 30 30 25.523 30 20C30 14.477 25.523 10 20 10ZM20 13C23.866 13 27 16.134 27 20C27 23.866 23.866 27 20 27C16.134 27 13 23.866 13 20C13 16.134 16.134 13 20 13Z" fill="white" opacity="0.3" />
+        <path d="M20 7L22.5 14H30L24 18.5L26.5 25.5L20 21L13.5 25.5L16 18.5L10 14H17.5L20 7Z" fill="white" />
+      </svg>
+    ),
+  },
+  anthropic: {
+    name: "Anthropic",
+    description: "Claude para análisis profundo y scoring con razonamiento.",
+    placeholder: "sk-ant-api03-...",
+    accent: "#D97757",
+    bg: "#FDF6F3",
+    border: "#F5C6B4",
+    docsUrl: "https://console.anthropic.com/settings/keys",
+    logo: (
+      <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-7 h-7">
+        <rect width="40" height="40" rx="8" fill="#D97757" />
+        <path d="M20 9L27 28H13L20 9Z" fill="white" />
+        <path d="M15 22H25" stroke="#D97757" strokeWidth="2.5" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  gemini: {
+    name: "Google Gemini",
+    description: "Gemini 1.5 Flash/Pro para scoring rápido y eficiente.",
+    placeholder: "AIzaSy...",
+    accent: "#4285F4",
+    bg: "#F0F4FF",
+    border: "#BFCFFF",
+    docsUrl: "https://aistudio.google.com/app/apikey",
+    logo: (
+      <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-7 h-7">
+        <rect width="40" height="40" rx="8" fill="url(#gem-grad)" />
+        <defs>
+          <linearGradient id="gem-grad" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#4285F4" />
+            <stop offset="0.5" stopColor="#9B59FF" />
+            <stop offset="1" stopColor="#EA4335" />
+          </linearGradient>
+        </defs>
+        <path d="M20 9C20 9 20 20 9 20C20 20 20 31 20 31C20 31 20 20 31 20C20 20 20 9 20 9Z" fill="white" />
+      </svg>
+    ),
+  },
+} as const;
+
+type TokenProvider = keyof typeof TOKEN_PROVIDERS;
+
+function TokenCard({
+  provider,
+  value,
+  onChange,
+}: {
+  provider: TokenProvider;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [visible, setVisible] = useState(false);
+  const cfg = TOKEN_PROVIDERS[provider];
+  const hasKey = value.trim().length > 0;
+
+  return (
+    <div
+      className="rounded-2xl border overflow-hidden transition-all"
+      style={{ borderColor: cfg.border, backgroundColor: cfg.bg }}
+    >
+      {/* Header strip */}
+      <div
+        className="px-5 py-4 flex items-center gap-3"
+        style={{ borderBottom: `1px solid ${cfg.border}` }}
+      >
+        {cfg.logo}
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-sm text-slate-800">{cfg.name}</p>
+          <p className="text-[11px] text-slate-500 leading-tight mt-0.5">{cfg.description}</p>
+        </div>
+        {hasKey && (
+          <span
+            className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full border"
+            style={{ color: cfg.accent, borderColor: cfg.border, backgroundColor: "white" }}
+          >
+            ✓ Configurado
+          </span>
+        )}
+      </div>
+
+      {/* Input */}
+      <div className="px-5 py-4 space-y-3">
+        <div className="relative">
+          <input
+            type={visible ? "text" : "password"}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={cfg.placeholder}
+            autoComplete="off"
+            className="w-full pr-10 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-900 focus:outline-none text-sm transition-all font-mono"
+            style={{
+              borderColor: value ? cfg.accent + "66" : undefined,
+              boxShadow: value ? `0 0 0 3px ${cfg.accent}18` : undefined,
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => setVisible((v) => !v)}
+            className="absolute inset-y-0 right-3 flex items-center text-slate-300 hover:text-slate-500 transition-colors"
+          >
+            {visible ? (
+              <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                <line x1="1" y1="1" x2="23" y2="23" />
+              </svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            )}
+          </button>
+        </div>
+        <a
+          href={cfg.docsUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[11px] font-semibold flex items-center gap-1 transition-colors"
+          style={{ color: cfg.accent }}
+        >
+          Obtener API key
+          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+            <polyline points="15 3 21 3 21 9" />
+            <line x1="10" y1="14" x2="21" y2="3" />
+          </svg>
+        </a>
+      </div>
+    </div>
+  );
 }
 
 const inputCls = "w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all text-sm";

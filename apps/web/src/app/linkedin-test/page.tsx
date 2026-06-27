@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import { createClient } from "@/utils/supabase/client";
 
 interface Author {
   name?: string;
@@ -11,6 +12,7 @@ interface Author {
 }
 
 interface LinkedInPost {
+  id?: string;
   url?: string;
   postUrl?: string;
   text?: string;
@@ -22,16 +24,78 @@ interface LinkedInPost {
   repostsCount?: number;
 }
 
+interface FilteredResults {
+  relevant: LinkedInPost[];
+  review: LinkedInPost[];
+  discarded: LinkedInPost[];
+}
+
+interface UserConfig {
+  blacklist_terms: string[];
+  blacklist_threshold: number;
+  llm_provider: string;
+  llm_api_key: string;
+  title?: string;
+  primary_skills?: string[];
+  secondary_skills?: string[];
+}
+
+function applyBlacklistFilter(
+  posts: LinkedInPost[],
+  terms: string[],
+  threshold: number
+): FilteredResults {
+  const relevant: LinkedInPost[] = [];
+  const review: LinkedInPost[] = [];
+  const discarded: LinkedInPost[] = [];
+
+  for (const post of posts) {
+    const text = (post.text ?? "").toLowerCase();
+    let totalHits = 0;
+    for (const term of terms) {
+      const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const matches = text.match(new RegExp(escaped, "gi"));
+      if (matches) totalHits += matches.length;
+    }
+    if (totalHits === 0) relevant.push(post);
+    else if (totalHits < threshold) review.push(post);
+    else discarded.push(post);
+  }
+
+  return { relevant, review, discarded };
+}
+
 export default function LinkedInTestPage() {
-  const [token, setToken] = useState("");
   const [searchQuery, setSearchQuery] = useState("frontend developer React");
-  const [maxResults, setMaxResults] = useState(6);
+  const [maxResults, setMaxResults] = useState(50);
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [results, setResults] = useState<LinkedInPost[]>([]);
   const [error, setError] = useState<string | null>(null);
-  
+
+  // Filter & scoring state
+  const [userConfig, setUserConfig] = useState<UserConfig | null>(null);
+  const [filteredResults, setFilteredResults] = useState<FilteredResults>({ relevant: [], review: [], discarded: [] });
+  const [activeResultTab, setActiveResultTab] = useState<"relevant" | "review" | "discarded">("relevant");
+  const [scoring, setScoring] = useState(false);
+  const [scores, setScores] = useState<Record<string, { score: number; reason: string }>>({});
+
   const pollTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    const loadConfig = async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase
+        .from("search_profiles")
+        .select("blacklist_terms, blacklist_threshold, llm_provider, llm_api_key, title, primary_skills, secondary_skills")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (data) setUserConfig(data as UserConfig);
+    };
+    loadConfig();
+  }, []);
 
   const cleanupPolling = () => {
     if (pollTimerRef.current) {
@@ -63,7 +127,6 @@ export default function LinkedInTestPage() {
         },
         body: JSON.stringify({
           action: "start",
-          token: token || undefined, // Si está vacío, el backend usa el token de env.local
           searchQuery,
           maxResults,
         }),
@@ -98,7 +161,6 @@ export default function LinkedInTestPage() {
             },
             body: JSON.stringify({
               action: "status",
-              token: token || undefined,
               runId,
               datasetId,
             }),
@@ -117,7 +179,54 @@ export default function LinkedInTestPage() {
           const currentStatus = statusData.status;
 
           if (currentStatus === "SUCCEEDED") {
-            setResults(statusData.data || []);
+            const allPosts: LinkedInPost[] = statusData.data || [];
+            setResults(allPosts);
+
+            const terms = userConfig?.blacklist_terms ?? [];
+            const threshold = userConfig?.blacklist_threshold ?? 2;
+
+            if (terms.length > 0) {
+              const filtered = applyBlacklistFilter(allPosts, terms, threshold);
+              setFilteredResults(filtered);
+              setActiveResultTab("relevant");
+
+              // LLM scoring for relevant posts
+              if (userConfig?.llm_api_key && userConfig?.llm_provider && filtered.relevant.length > 0) {
+                setScoring(true);
+                setScores({});
+                fetch("/api/linkedin-score", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    posts: filtered.relevant,
+                    provider: userConfig.llm_provider,
+                    apiKey: userConfig.llm_api_key,
+                    profile: {
+                      title: userConfig.title,
+                      primary_skills: userConfig.primary_skills,
+                      secondary_skills: userConfig.secondary_skills,
+                    },
+                  }),
+                })
+                  .then((r) => r.json())
+                  .then((data) => {
+                    if (data.scores) {
+                      const map: Record<string, { score: number; reason: string }> = {};
+                      for (const s of data.scores) {
+                        const post = filtered.relevant[s.index];
+                        const key = post?.id ?? String(s.index);
+                        map[key] = { score: s.score, reason: s.reason };
+                      }
+                      setScores(map);
+                    }
+                  })
+                  .catch(console.error)
+                  .finally(() => setScoring(false));
+              }
+            } else {
+              setFilteredResults({ relevant: allPosts, review: [], discarded: [] });
+            }
+
             setLoading(false);
             setStatusMessage("");
           } else if (["FAILED", "ABORTED", "TIMED-OUT"].includes(currentStatus)) {
@@ -164,27 +273,14 @@ export default function LinkedInTestPage() {
 
         {/* Panel principal: Formulario */}
         <div className="bg-slate-800/60 backdrop-blur-xl border border-slate-700/80 rounded-2xl p-6 md:p-8 shadow-2xl mb-12">
-          <form onSubmit={handleSearch} className="grid grid-cols-1 md:grid-cols-12 gap-6 items-end">
-            <div className="md:col-span-4">
+          <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-4 items-end">
+            <div className="flex-1">
               <label className="block text-xs font-bold uppercase tracking-wider text-indigo-300 mb-2">
-                Apify API Token
-              </label>
-              <input
-                type="password"
-                placeholder="Usando token de .env.local..."
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-                className="w-full bg-slate-900/80 border border-slate-700 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl px-4 py-3 text-sm text-slate-100 placeholder-slate-500 outline-none transition-all duration-200"
-              />
-            </div>
-
-            <div className="md:col-span-5">
-              <label className="block text-xs font-bold uppercase tracking-wider text-indigo-300 mb-2">
-                Término de Búsqueda
+                Búsqueda
               </label>
               <input
                 type="text"
-                placeholder="Ej. react native remote argentina"
+                placeholder="Ej. frontend developer React"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full bg-slate-900/80 border border-slate-700 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl px-4 py-3 text-sm text-slate-100 placeholder-slate-500 outline-none transition-all duration-200"
@@ -192,14 +288,14 @@ export default function LinkedInTestPage() {
               />
             </div>
 
-            <div className="md:col-span-2">
+            <div className="w-32 shrink-0">
               <label className="block text-xs font-bold uppercase tracking-wider text-indigo-300 mb-2">
-                Cant. Resultados
+                Resultados
               </label>
               <input
                 type="number"
                 min="1"
-                max="50"
+                max="200"
                 value={maxResults}
                 onChange={(e) => setMaxResults(Number(e.target.value))}
                 className="w-full bg-slate-900/80 border border-slate-700 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl px-4 py-3 text-sm text-slate-100 outline-none transition-all duration-200"
@@ -207,22 +303,20 @@ export default function LinkedInTestPage() {
               />
             </div>
 
-            <div className="md:col-span-1">
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full h-[46px] bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 disabled:cursor-not-allowed font-bold text-white rounded-xl shadow-lg hover:shadow-indigo-500/20 active:scale-95 transition-all duration-200 flex items-center justify-center"
-              >
-                {loading ? (
-                  <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                ) : (
-                  "Scrape"
-                )}
-              </button>
-            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="shrink-0 h-[46px] px-6 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 disabled:cursor-not-allowed font-bold text-white rounded-xl shadow-lg hover:shadow-indigo-500/20 active:scale-95 transition-all duration-200 flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+              ) : (
+                "Buscar"
+              )}
+            </button>
           </form>
 
           {statusMessage && (
@@ -287,11 +381,69 @@ export default function LinkedInTestPage() {
           )}
 
           {results.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {results.map((post, idx) => (
-                <PostCard key={idx} post={post} />
-              ))}
-            </div>
+            <>
+              {/* Tab bar — only shown when blacklist is active */}
+              {(userConfig?.blacklist_terms ?? []).length > 0 && (
+                <div className="flex flex-wrap items-center gap-3 mb-6">
+                  {(
+                    [
+                      { key: "relevant", label: "Relevantes", count: filteredResults.relevant.length, color: "emerald" },
+                      { key: "review", label: "A revisar", count: filteredResults.review.length, color: "amber" },
+                      { key: "discarded", label: "Descartados", count: filteredResults.discarded.length, color: "rose" },
+                    ] as const
+                  ).map((tab) => (
+                    <button
+                      key={tab.key}
+                      onClick={() => setActiveResultTab(tab.key)}
+                      className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all border ${
+                        activeResultTab === tab.key
+                          ? tab.color === "emerald"
+                            ? "bg-emerald-600 border-emerald-500 text-white"
+                            : tab.color === "amber"
+                            ? "bg-amber-600 border-amber-500 text-white"
+                            : "bg-rose-700 border-rose-600 text-white"
+                          : "bg-slate-800/60 border-slate-700 text-slate-400 hover:text-slate-200"
+                      }`}
+                    >
+                      {tab.label}
+                      <span className="ml-2 text-xs opacity-75">({tab.count})</span>
+                    </button>
+                  ))}
+                  {scoring && (
+                    <span className="flex items-center gap-2 text-xs text-indigo-400 ml-1">
+                      <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      Calculando scores...
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {((userConfig?.blacklist_terms ?? []).length > 0
+                  ? activeResultTab === "relevant"
+                    ? filteredResults.relevant
+                    : activeResultTab === "review"
+                    ? filteredResults.review
+                    : filteredResults.discarded
+                  : results
+                ).map((post, idx) => (
+                  <PostCard
+                    key={post.id ?? idx}
+                    post={post}
+                    score={
+                      activeResultTab === "relevant" && post.id
+                        ? scores[post.id]
+                        : undefined
+                    }
+                    dimmed={activeResultTab === "discarded"}
+                  />
+                ))}
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -299,13 +451,23 @@ export default function LinkedInTestPage() {
   );
 }
 
-function PostCard({ post }: { post: LinkedInPost }) {
+function PostCard({
+  post,
+  score,
+  dimmed = false,
+}: {
+  post: LinkedInPost;
+  score?: { score: number; reason: string };
+  dimmed?: boolean;
+}) {
   const [expanded, setExpanded] = useState(false);
   const authorName = post.author?.name || "Usuario de LinkedIn";
   const authorHeadline = post.author?.headline || "Perfil Profesional";
   const authorImg = post.author?.profileImage;
   const postText = post.text || "";
-  const postLink = post.url || post.postUrl || "https://linkedin.com";
+  const postLink = post.id
+    ? `https://www.linkedin.com/feed/update/urn:li:activity:${post.id}`
+    : post.url || post.postUrl || "https://www.linkedin.com";
   const isLong = postText.length > 260;
   const displayText = expanded ? postText : postText.slice(0, 260) + (isLong ? "..." : "");
 
@@ -317,8 +479,15 @@ function PostCard({ post }: { post: LinkedInPost }) {
     year: "numeric"
   }) : "Reciente";
 
+  const scoreColor =
+    score && score.score >= 70
+      ? "text-emerald-400"
+      : score && score.score >= 40
+      ? "text-amber-400"
+      : "text-rose-400";
+
   return (
-    <div className="bg-slate-800/40 hover:bg-slate-800/60 border border-slate-700/50 hover:border-indigo-500/40 rounded-2xl p-6 transition-all duration-300 flex flex-col justify-between group shadow-lg hover:shadow-indigo-500/5 animate-fadeIn">
+    <div className={`bg-slate-800/40 hover:bg-slate-800/60 border border-slate-700/50 hover:border-indigo-500/40 rounded-2xl p-6 transition-all duration-300 flex flex-col justify-between group shadow-lg hover:shadow-indigo-500/5 animate-fadeIn ${dimmed ? "opacity-50" : ""}`}>
       <div>
         {/* Autor */}
         <div className="flex items-start gap-3 mb-4">
@@ -380,6 +549,16 @@ function PostCard({ post }: { post: LinkedInPost }) {
           </div>
           <span className="text-slate-500">{displayDate}</span>
         </div>
+
+        {/* Score badge */}
+        {score && (
+          <div className="flex items-start gap-2 bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2">
+            <span className={`font-black text-base leading-none ${scoreColor}`}>
+              {score.score}
+            </span>
+            <span className="text-[11px] text-slate-400 leading-tight line-clamp-2">{score.reason}</span>
+          </div>
+        )}
 
         {/* Botón de acción */}
         <a

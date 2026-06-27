@@ -42,10 +42,9 @@ export async function POST(request: Request) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          searchQuery,
+          searchQueries: [searchQuery],
           sortBy: 'date',
-          maxResults: limit,
-          excludeReposts: false,
+          maxPosts: limit,
         }),
       })
 

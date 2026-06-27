@@ -11,11 +11,10 @@ interface NavLink {
 
 const NAV_LINKS: NavLink[] = [
   { href: "/", label: "Dashboard", icon: "📊" },
-  { href: "/vacantes", label: "Vacantes", icon: "🎯" },
+  { href: "/buscar-empleo", label: "Buscar Empleo", icon: "🔍" },
   { href: "/postulaciones", label: "Postulaciones", icon: "🚀" },
   { href: "/configuracion", label: "Alertas", icon: "🔔" },
   { href: "/perfil", label: "Perfil", icon: "🧑‍💻" },
-  { href: "/linkedin-test", label: "Prueba Apify", icon: "🔗" },
 ];
 
 export function SidebarLinks() {

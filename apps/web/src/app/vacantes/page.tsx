@@ -8,7 +8,6 @@ import {
   deleteJobPost,
   deleteAllJobPosts,
   deleteFilteredJobPosts,
-  supabase,
 } from "@/lib/supabase";
 import { saveApplication, getApplications } from "@/lib/applications";
 import { AlertModal, ConfirmModal } from "@/components/Modal";
@@ -374,9 +373,7 @@ export default function VacantesPage() {
           <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Vacantes</h1>
-              <p className="text-gray-500 text-sm mt-1">
-                {total} oportunidades pendientes
-              </p>
+              <p className="text-gray-500 text-sm mt-1">{total} oportunidades pendientes</p>
             </div>
             <div className="flex gap-2 flex-wrap items-center">
               {selectedIds.size > 0 && (
@@ -418,15 +415,9 @@ export default function VacantesPage() {
               >
                 Vaciar todo
               </button>
-              <button
-                onClick={() => setShowSearchModal(true)}
-                disabled={isScraping !== null || loading}
-                className="flex items-center justify-center min-w-[160px] gap-2 text-sm bg-indigo-600 text-white px-4 py-2.5 rounded-xl hover:bg-indigo-700 transition-all disabled:opacity-75 shadow-lg shadow-indigo-100 font-bold"
-              >
-                Search Jobs
-              </button>
             </div>
           </div>
+
 
           {batchProgress && !batchProgress.isComplete && (
             <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 mb-4 flex items-center gap-3">
@@ -1225,3 +1216,4 @@ function TailorResultModal({
     </div>
   );
 }
+
