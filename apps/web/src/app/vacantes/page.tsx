@@ -303,7 +303,7 @@ export default function VacantesPage() {
           setAlertMsg(data.message || 'No new results.');
         }
       } else {
-        throw new Error(data.error || 'Unknown error');
+        throw new Error(data.error || data.message || 'Unknown error');
       }
     } catch (err: any) {
       setAlertMsg('Error searching jobs: ' + err.message);

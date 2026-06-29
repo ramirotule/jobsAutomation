@@ -22,8 +22,8 @@ export async function POST(request: Request) {
 
     if (!activeToken) {
       return NextResponse.json(
-        { error: 'Falta el token de Apify. Configurá APIFY_API_TOKEN en el archivo .env.local o ingresalo en el campo de la interfaz.' },
-        { status: 400 }
+        { error: 'apify_key_missing' },
+        { status: 402 }
       )
     }
 
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Falta el término de búsqueda (searchQuery)' }, { status: 400 })
       }
 
-      const limit = Math.min(Math.max(1, Number(maxResults) || 10), 200)
+      const limit = Math.min(Math.max(1, Number(maxResults) || 10), 50)
       const apifyStartUrl = `https://api.apify.com/v2/actors/harvestapi~linkedin-post-search/runs?token=${encodeURIComponent(activeToken)}`
 
       const response = await fetch(apifyStartUrl, {
@@ -45,6 +45,7 @@ export async function POST(request: Request) {
           searchQueries: [searchQuery],
           sortBy: 'date',
           maxPosts: limit,
+          
         }),
       })
 

@@ -342,7 +342,7 @@ function PerfilPageContent() {
     setForm((prev) => ({ ...prev, [key]: e.target.value }));
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-20">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-20 overflow-x-hidden">
       {/* Dynamic Toast */}
       {toast && (
         <div className="fixed top-20 lg:top-6 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-4 duration-300">
@@ -524,38 +524,66 @@ function PerfilPageContent() {
         )}
 
         {activeTab === "tokens" && (
-          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <p className="text-xs text-slate-400">
-              Tus API keys se guardan en tu perfil y se usan para el scoring automático y las búsquedas. Nunca se comparten.
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <TokenCard
-                provider="apify"
-                value={apifyKey}
-                onChange={setApifyKey}
-              />
-              <TokenCard
-                provider="openai"
-                value={openaiKey}
-                onChange={setOpenaiKey}
-              />
-              <TokenCard
-                provider="anthropic"
-                value={anthropicKey}
-                onChange={setAnthropicKey}
-              />
-              <TokenCard
-                provider="gemini"
-                value={geminiKey}
-                onChange={setGeminiKey}
-              />
-              <TokenCard
-                provider="nvidia"
-                value={nvidiaKey}
-                onChange={setNvidiaKey}
-              />
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+
+            {/* ── Apify ──────────────────────────────────────────── */}
+            <div className="space-y-3">
+              <div>
+                <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">Buscar Empleo</h2>
+                <p className="text-xs text-slate-400 mt-0.5">Requerido para que funcione la búsqueda de posts en LinkedIn.</p>
+              </div>
+              <div className="rounded-2xl border border-orange-200 bg-orange-50 overflow-hidden">
+                {/* Instrucciones */}
+                <div className="px-5 py-4 text-xs text-orange-800 space-y-3 border-b border-orange-200">
+                  <p className="font-bold text-sm">Cómo obtener tu Apify token</p>
+                  <p>Apify corre el scraper que busca posts de trabajo en LinkedIn. Sin este token la sección <span className="font-bold">Buscar Empleo</span> no va a funcionar.</p>
+                  <ol className="space-y-2 list-none">
+                    <li className="flex gap-2">
+                      <span className="shrink-0 font-bold bg-orange-200 text-orange-700 rounded-full w-5 h-5 flex items-center justify-center text-[10px]">1</span>
+                      <span>Creá una cuenta gratuita en{" "}
+                        <a href="https://console.apify.com" target="_blank" rel="noopener noreferrer" className="font-semibold underline">console.apify.com</a>
+                      </span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="shrink-0 font-bold bg-orange-200 text-orange-700 rounded-full w-5 h-5 flex items-center justify-center text-[10px]">2</span>
+                      <span>Abrí el actor que usa la app:{" "}
+                        <a href="https://console.apify.com/actors/buIWk2uOUzTmcLsuB/input" target="_blank" rel="noopener noreferrer" className="font-semibold underline">LinkedIn Post Search Scraper (No Cookies)</a>
+                        {" "}y guardalo en tu cuenta (botón <span className="font-bold">Save</span>).
+                      </span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="shrink-0 font-bold bg-orange-200 text-orange-700 rounded-full w-5 h-5 flex items-center justify-center text-[10px]">3</span>
+                      <span>Andá a{" "}
+                        <a href="https://console.apify.com/account/integrations" target="_blank" rel="noopener noreferrer" className="font-semibold underline">Account → Integrations</a>
+                        {" "}y copiá tu token personal (empieza con <span className="font-mono bg-orange-100 px-1 rounded">apify_api_...</span>).
+                      </span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="shrink-0 font-bold bg-orange-200 text-orange-700 rounded-full w-5 h-5 flex items-center justify-center text-[10px]">4</span>
+                      <span>Pegalo en el campo de abajo y guardá.</span>
+                    </li>
+                  </ol>
+                </div>
+                {/* Input inline dentro del mismo card */}
+                <ApifyInlineInput value={apifyKey} onChange={setApifyKey} />
+              </div>
             </div>
-            <div className="pt-2">
+
+            {/* ── IA Tools ───────────────────────────────────────── */}
+            <div className="space-y-3">
+              <div>
+                <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">Herramientas de IA <span className="text-xs font-normal text-slate-400 ml-1">(opcionales)</span></h2>
+                <p className="text-xs text-slate-400 mt-0.5">No son obligatorias, pero le dan más potencia a la app: scoring de vacantes, adaptación del CV, análisis de posts y más.</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <TokenCard provider="openai" value={openaiKey} onChange={setOpenaiKey} />
+                <TokenCard provider="anthropic" value={anthropicKey} onChange={setAnthropicKey} />
+                <TokenCard provider="gemini" value={geminiKey} onChange={setGeminiKey} />
+                <TokenCard provider="nvidia" value={nvidiaKey} onChange={setNvidiaKey} />
+              </div>
+            </div>
+
+            <div className="pt-1">
               <button
                 onClick={saveTokens}
                 disabled={savingTokens}
@@ -943,7 +971,7 @@ function TagInput({
 const TOKEN_PROVIDERS = {
   apify: {
     name: "Apify",
-    description: "Web scraping & automation. Usado para buscar posts en LinkedIn.",
+    description: "Alimenta la sección Buscar Empleo: busca posts de trabajo en LinkedIn. Sin este token esa búsqueda no funciona.",
     placeholder: "apify_api_...",
     accent: "#FF7518",
     bg: "#FFF4EC",
@@ -1029,6 +1057,51 @@ const TOKEN_PROVIDERS = {
 } as const;
 
 type TokenProvider = keyof typeof TOKEN_PROVIDERS;
+
+function ApifyInlineInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [visible, setVisible] = useState(false);
+  const hasKey = value.trim().length > 0;
+  return (
+    <div className="px-5 py-4 bg-white flex items-center gap-3">
+      <div className="relative flex-1">
+        <input
+          type={visible ? "text" : "password"}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="apify_api_..."
+          autoComplete="off"
+          className="w-full pr-10 px-4 py-2.5 rounded-xl border text-sm font-mono outline-none transition-all"
+          style={{
+            borderColor: hasKey ? "#FF751866" : "#FFD4AC",
+            boxShadow: hasKey ? "0 0 0 3px #FF751818" : undefined,
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => setVisible((v) => !v)}
+          className="absolute inset-y-0 right-3 flex items-center text-slate-300 hover:text-slate-500 transition-colors"
+        >
+          {visible ? (
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+              <line x1="1" y1="1" x2="23" y2="23" />
+            </svg>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          )}
+        </button>
+      </div>
+      {hasKey && (
+        <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full border border-orange-200 text-orange-500 bg-orange-50 whitespace-nowrap">
+          ✓ Configurado
+        </span>
+      )}
+    </div>
+  );
+}
 
 function TokenCard({
   provider,

@@ -162,6 +162,7 @@ export default function BuscarEmpleoPage() {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [missingApifyKey, setMissingApifyKey] = useState(false);
   const [results, setResults] = useState<LIPost[]>([]);
   const [filtered, setFiltered] = useState<LIFiltered>({ relevant: [], review: [], discarded: [] });
   const [activeTab, setActiveTab] = useState<"relevant" | "review" | "discarded">("relevant");
@@ -244,6 +245,11 @@ export default function BuscarEmpleoPage() {
         }),
       });
       const startData = await startRes.json();
+      if (startRes.status === 402 && startData.error === 'apify_key_missing') {
+        setMissingApifyKey(true);
+        setLoading(false);
+        return;
+      }
       if (!startRes.ok) throw new Error(startData.error || "No se pudo iniciar la búsqueda.");
 
       const { runId, datasetId } = startData;
@@ -422,7 +428,7 @@ export default function BuscarEmpleoPage() {
   const sortedPosts = sortLIPosts(activePosts, sort);
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 overflow-x-hidden">
       <div className="max-w-7xl mx-auto px-4 py-5 lg:py-8">
         {/* Header */}
         <div className="mb-6">
@@ -496,7 +502,31 @@ export default function BuscarEmpleoPage() {
           </div>
         )}
 
-        {/* Error */}
+        {/* Missing Apify key — actionable banner */}
+        {missingApifyKey && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4 flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex-1 text-sm text-amber-800">
+              <p className="font-bold mb-0.5">Falta tu token de Apify</p>
+              <p className="text-amber-700">Para buscar posts en LinkedIn necesitás configurar tu token personal de Apify. Es gratis y tarda menos de 2 minutos.</p>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <a
+                href="/perfil?tab=tokens"
+                className="text-xs font-bold bg-amber-500 text-white px-4 py-2 rounded-lg hover:bg-amber-600 transition-colors whitespace-nowrap"
+              >
+                Configurar token →
+              </a>
+              <button
+                onClick={() => setMissingApifyKey(false)}
+                className="text-xs text-amber-600 hover:text-amber-800 px-2"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Generic error */}
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4 text-sm text-red-700">
             <strong>Error:</strong> {error}
@@ -988,60 +1018,66 @@ function PostModal({
               </div>
             </div>
           )}
+          {/* Primary actions row */}
           <div className="flex gap-2">
-          {/* AI Analyze button */}
-          <button
-            onClick={analyze}
-            disabled={analyzing}
-            className="flex-1 flex items-center justify-center gap-2 text-sm font-bold py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-60 text-white transition-all active:scale-95"
-          >
-            {analyzing ? (
-              <>
-                <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                </svg>
-                Analizando...
-              </>
-            ) : (
-              <>
-                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 2L9.5 9.5 2 12l7.5 2.5L12 22l2.5-7.5L22 12l-7.5-2.5z"/>
-                </svg>
-                {aiScore ? "Re-analizar" : "Analizar con IA"}
-              </>
-            )}
-          </button>
+            <button
+              onClick={analyze}
+              disabled={analyzing}
+              className="flex-1 flex items-center justify-center gap-2 text-sm font-bold py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-60 text-white transition-all active:scale-95 whitespace-nowrap"
+            >
+              {analyzing ? (
+                <>
+                  <svg className="animate-spin h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                  </svg>
+                  Analizando...
+                </>
+              ) : (
+                <>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                    <path d="M12 2L9.5 9.5 2 12l7.5 2.5L12 22l2.5-7.5L22 12l-7.5-2.5z"/>
+                  </svg>
+                  {aiScore ? "Re-analizar" : "Analizar con IA"}
+                </>
+              )}
+            </button>
+            <button
+              onClick={() => { onApply(); onClose(); }}
+              className="flex-1 text-sm font-bold py-2.5 rounded-xl bg-gray-900 dark:bg-gray-700 text-white hover:bg-indigo-600 transition-all active:scale-95 whitespace-nowrap"
+            >
+              Postular →
+            </button>
+          </div>
 
-          <button onClick={() => { onApply(); onClose(); }}
-            className="flex-1 text-sm font-bold py-2.5 rounded-xl bg-gray-900 dark:bg-gray-700 text-white hover:bg-indigo-600 transition-all active:scale-95">
-            Postular →
-          </button>
-
-          <a href={postLink} target="_blank" rel="noopener noreferrer"
-            className="w-10 flex items-center justify-center rounded-xl border border-gray-200 dark:border-gray-700 text-[#0a66c2] dark:text-[#5b9fd4] hover:bg-blue-50 dark:hover:bg-blue-950 transition-all"
-            title="Ver en LinkedIn">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-            </svg>
-          </a>
-
-          <button onClick={() => { onIgnore(); onClose(); }}
-            className="w-10 flex items-center justify-center rounded-xl border border-gray-200 dark:border-gray-700 text-gray-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
-            title="Ignorar para siempre">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-              <line x1="1" y1="1" x2="23" y2="23"/>
-            </svg>
-          </button>
-          <button onClick={() => { onDelete(); onClose(); }}
-            className="w-10 flex items-center justify-center rounded-xl border border-gray-200 dark:border-gray-700 text-gray-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 transition-all"
-            title="Eliminar">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="3 6 5 6 21 6"/>
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-            </svg>
-          </button>
+          {/* Secondary actions row */}
+          <div className="flex gap-2">
+            <a href={postLink} target="_blank" rel="noopener noreferrer"
+              className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-[#0a66c2] dark:text-[#5b9fd4] hover:bg-blue-50 dark:hover:bg-blue-950 transition-all text-xs font-medium"
+              title="Ver en LinkedIn">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+              </svg>
+              LinkedIn
+            </a>
+            <button onClick={() => { onIgnore(); onClose(); }}
+              className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all text-xs font-medium"
+              title="Ignorar para siempre">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                <line x1="1" y1="1" x2="23" y2="23"/>
+              </svg>
+              Ignorar
+            </button>
+            <button onClick={() => { onDelete(); onClose(); }}
+              className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 transition-all text-xs font-medium"
+              title="Eliminar">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+              </svg>
+              Eliminar
+            </button>
           </div>
         </div>
       </div>

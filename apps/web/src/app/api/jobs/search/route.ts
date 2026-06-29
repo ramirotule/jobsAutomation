@@ -308,20 +308,20 @@ async function fetchLinkedInApi(
 // ============================================================
 export async function POST(request: Request) {
   try {
-    const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY || ''
-    if (!RAPIDAPI_KEY) {
-      return NextResponse.json(
-        { error: 'Missing RAPIDAPI_KEY in environment. Add it to .env.local and restart the server.' },
-        { status: 500 },
-      )
-    }
-
     const cookieStore = await cookies()
     const supabase = createClient(cookieStore)
 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY || ''
+    if (!RAPIDAPI_KEY) {
+      return NextResponse.json(
+        { error: 'Missing RAPIDAPI_KEY in environment.' },
+        { status: 500 },
+      )
     }
 
     const body = await request.json().catch(() => ({}))
