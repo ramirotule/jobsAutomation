@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
-import type { Seniority, Modality } from "@/types";
+import type { Seniority, Modality, LanguageEntry } from "@/types";
 import { searchITTerms, type ITTerm } from "@/lib/it-terms-dictionary";
 
 interface ProfileForm {
@@ -14,6 +14,7 @@ interface ProfileForm {
   target_roles: string;
   preferred_modality: Modality;
   location: string;
+  languages: LanguageEntry[];
   years_experience: number;
   min_score_threshold: number;
   alert_score_threshold: number;
@@ -27,6 +28,7 @@ const DEFAULT_FORM: ProfileForm = {
   target_roles: "",
   preferred_modality: "remote",
   location: "",
+  languages: [],
   years_experience: 0,
   min_score_threshold: 60,
   alert_score_threshold: 75,
@@ -43,6 +45,10 @@ function PerfilPageContent() {
   const [savedProfile, setSavedProfile] = useState(false);
   const [savedCv, setSavedCv] = useState(false);
   const [savedKit, setSavedKit] = useState(false);
+
+  const [extractingCv, setExtractingCv] = useState(false);
+  const [extractError, setExtractError] = useState<string | null>(null);
+  const [extractReasoning, setExtractReasoning] = useState<string | null>(null);
 
   const validTabs = ["perfil", "cv", "kit", "cuenta", "tokens"] as const;
   type Tab = typeof validTabs[number];
@@ -129,6 +135,7 @@ function PerfilPageContent() {
         target_roles: (searchProfile.target_roles ?? []).join(", "),
         preferred_modality: searchProfile.preferred_modality ?? "remote",
         location: searchProfile.location ?? "",
+        languages: searchProfile.languages ?? [],
         years_experience: searchProfile.years_experience ?? 0,
         min_score_threshold: searchProfile.min_score_threshold ?? 60,
         alert_score_threshold: searchProfile.alert_score_threshold ?? 75,
@@ -145,16 +152,16 @@ function PerfilPageContent() {
     }
 
     // Load CV
-    const { data: cv } = await supabase
+    const { data: cvData, error: cvError } = await supabase
       .from("resumes")
       .select("raw_text")
       .eq("user_id", user.id)
       .eq("is_active", true)
       .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(1);
 
-    if (cv?.raw_text) setCvText(cv.raw_text);
+    if (cvError) console.error("Error loading CV:", cvError);
+    if (cvData && cvData.length > 0) setCvText(cvData[0].raw_text);
   }, [supabase]);
 
   useEffect(() => {
@@ -182,6 +189,7 @@ function PerfilPageContent() {
       target_roles: form.target_roles.split(",").map(s => s.trim()).filter(Boolean),
       preferred_modality: form.preferred_modality,
       location: form.location,
+      languages: form.languages,
       years_experience: form.years_experience,
       min_score_threshold: form.min_score_threshold,
       alert_score_threshold: form.alert_score_threshold,
@@ -200,9 +208,11 @@ function PerfilPageContent() {
 
     try {
       if (existing) {
-        await supabase.from("search_profiles").update(payload).eq("id", existing.id);
+        const { error } = await supabase.from("search_profiles").update(payload).eq("id", existing.id);
+        if (error) throw error;
       } else {
-        await supabase.from("search_profiles").insert(payload);
+        const { error } = await supabase.from("search_profiles").insert(payload);
+        if (error) throw error;
       }
       showToast("Criterios de búsqueda actualizados");
     } catch (e: any) {
@@ -237,9 +247,11 @@ function PerfilPageContent() {
 
     try {
       if (existing) {
-        await supabase.from("search_profiles").update(tokenPayload).eq("id", existing.id);
+        const { error } = await supabase.from("search_profiles").update(tokenPayload).eq("id", existing.id);
+        if (error) throw error;
       } else {
-        await supabase.from("search_profiles").insert({ ...tokenPayload, is_active: true });
+        const { error } = await supabase.from("search_profiles").insert({ ...tokenPayload, is_active: true });
+        if (error) throw error;
       }
       showToast("Tokens guardados");
     } catch (e: any) {
@@ -255,13 +267,105 @@ function PerfilPageContent() {
     if (!user) return;
 
     try {
-      await supabase.from("resumes").update({ is_active: false }).eq("user_id", user.id);
-      await supabase.from("resumes").insert({ user_id: user.id, raw_text: cvText, is_active: true });
+      const { error: e1 } = await supabase.from("resumes").update({ is_active: false }).eq("user_id", user.id);
+      if (e1) throw e1;
+      const { error: e2 } = await supabase.from("resumes").insert({ user_id: user.id, raw_text: cvText, is_active: true });
+      if (e2) throw e2;
       showToast("CV actualizado correctamente");
     } catch (e: any) {
       showToast(e.message, 'error');
     } finally {
       setSavingCv(false);
+    }
+  }
+
+  async function extractCvFromLLM() {
+    if (!cvText.trim()) {
+      showToast("Primero pegá tu CV", "error");
+      return;
+    }
+    const providerMap: Record<string, string> = { gemini: geminiKey, openai: openaiKey, anthropic: anthropicKey, nvidia: nvidiaKey };
+    
+    // Check if selected provider has a key, otherwise fallback to the first available key
+    let activeProvider = llmProvider;
+    if (!providerMap[activeProvider]) {
+      activeProvider = nvidiaKey ? "nvidia" : geminiKey ? "gemini" : openaiKey ? "openai" : anthropicKey ? "anthropic" : "gemini";
+    }
+    const key = providerMap[activeProvider];
+
+    if (!activeProvider || !key) {
+      showToast("Configurá un token de IA en la pestaña 'Tokens' primero", "error");
+      setActiveTab("tokens");
+      return;
+    }
+
+    setExtractingCv(true);
+    setExtractError(null);
+    setExtractReasoning(null);
+
+    try {
+      const res = await fetch("/api/cv/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cvText, provider: activeProvider, apiKey: key.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      
+      const taskId = data.taskId;
+      if (!taskId) throw new Error("No se recibió el ID de la tarea de extracción.");
+
+      let attempts = 0;
+      const interval = setInterval(async () => {
+        attempts++;
+        if (attempts > 90) { // 3 minutes timeout
+          clearInterval(interval);
+          setExtractError("Tiempo de espera agotado.");
+          setExtractingCv(false);
+          showToast("Error al extraer CV con IA (Timeout)", "error");
+          return;
+        }
+
+        try {
+          const pollRes = await fetch(`/api/cv/extract?taskId=${taskId}`);
+          const pollData = await pollRes.json();
+          if (!pollRes.ok) throw new Error(pollData.error);
+
+          if (pollData.status === "success") {
+            clearInterval(interval);
+            const ext = pollData.extracted;
+            if (ext) {
+              setForm(prev => ({
+                ...prev,
+                title: ext.title || prev.title,
+                seniority: (ext.seniority as Seniority) || prev.seniority,
+                primary_skills: ext.primary_skills ? ext.primary_skills.join(", ") : prev.primary_skills,
+                secondary_skills: ext.secondary_skills ? ext.secondary_skills.join(", ") : prev.secondary_skills,
+                target_roles: ext.target_roles ? ext.target_roles.join(", ") : prev.target_roles,
+                location: ext.location || prev.location,
+                languages: ext.languages || prev.languages,
+                years_experience: ext.years_experience !== undefined ? ext.years_experience : prev.years_experience,
+              }));
+              setExtractReasoning(ext._reasoning || "Análisis completado sin razonamiento detallado.");
+              showToast("Criterios extraídos correctamente. ¡Revisá y guardá!");
+            }
+            setExtractingCv(false);
+          } else if (pollData.status === "failed") {
+            clearInterval(interval);
+            throw new Error(pollData.error || "La tarea de extracción falló.");
+          }
+        } catch (pollErr: any) {
+          clearInterval(interval);
+          setExtractError(pollErr.message);
+          setExtractingCv(false);
+          showToast("Error al extraer CV con IA", "error");
+        }
+      }, 2000); // Poll every 2 seconds
+
+    } catch (e: any) {
+      setExtractError(e.message);
+      showToast("Error al extraer CV con IA", "error");
+      setExtractingCv(false);
     }
   }
 
@@ -458,6 +562,56 @@ function PerfilPageContent() {
                 <input value={form.location} onChange={set("location")} className={inputCls} placeholder="Ej: Buenos Aires" />
               </Field>
             </div>
+            {/* Idiomas */}
+            <div className="border-t border-slate-100 pt-5 space-y-4">
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Idiomas</h3>
+              </div>
+              <div className="space-y-2">
+                {form.languages.map((lang, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <input 
+                      value={lang.lang}
+                      onChange={(e) => {
+                        const newLangs = [...form.languages];
+                        newLangs[idx].lang = e.target.value;
+                        setForm(p => ({...p, languages: newLangs}));
+                      }}
+                      className={inputCls} 
+                      placeholder="Idioma" 
+                    />
+                    <select
+                      value={lang.level}
+                      onChange={(e) => {
+                        const newLangs = [...form.languages];
+                        newLangs[idx].level = e.target.value as LanguageEntry["level"];
+                        setForm(p => ({...p, languages: newLangs}));
+                      }}
+                      className={inputCls}
+                    >
+                      {["native", "A1", "A2", "B1", "B2", "C1", "C2"].map(l => <option key={l} value={l}>{l}</option>)}
+                    </select>
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        const newLangs = form.languages.filter((_, i) => i !== idx);
+                        setForm(p => ({...p, languages: newLangs}));
+                      }}
+                      className="text-red-500 hover:text-red-700 font-bold px-2"
+                    >
+                      X
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setForm(p => ({...p, languages: [...p.languages, { lang: "", level: "B2" }]}))}
+                  className="text-xs text-indigo-600 font-bold hover:underline"
+                >
+                  + Agregar idioma
+                </button>
+              </div>
+            </div>
             {/* Blacklist */}
             <div className="border-t border-slate-100 pt-5 space-y-4">
               <div>
@@ -510,7 +664,7 @@ function PerfilPageContent() {
                   <option value="gemini">Google Gemini</option>
                   <option value="openai">OpenAI</option>
                   <option value="anthropic">Anthropic</option>
-                  <option value="nvidia">Nvidia NIM (Gemma 4)</option>
+                  <option value="nvidia">Nvidia NIM (Llama 3.1 8B)</option>
                 </select>
               </Field>
             </div>
@@ -597,6 +751,27 @@ function PerfilPageContent() {
 
         {activeTab === "cv" && (
           <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 sm:p-6 space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            
+            {extractReasoning && (
+              <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 p-4 rounded-xl space-y-2 mb-4">
+                <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-400 font-bold text-sm">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L9.5 9.5 2 12l7.5 2.5L12 22l2.5-7.5L22 12l-7.5-2.5z"/></svg>
+                  Análisis de IA Completado
+                </div>
+                <p className="text-sm text-indigo-900 dark:text-indigo-200 leading-relaxed">
+                  {extractReasoning}
+                </p>
+                <div className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold pt-1">
+                  Revisá la pestaña "Criterios" para ver los datos autocompletados. No olvides guardarlos si estás de acuerdo.
+                </div>
+              </div>
+            )}
+            {extractError && (
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4 rounded-xl mb-4">
+                <p className="text-sm text-red-600 dark:text-red-400 font-bold">Error de IA: {extractError}</p>
+              </div>
+            )}
+
             <textarea
               value={cvText}
               onChange={(e) => setCvText(e.target.value)}
@@ -604,9 +779,29 @@ function PerfilPageContent() {
               className={`${inputCls} font-mono text-xs`}
               placeholder="Pegá aquí el texto completo de tu CV..."
             />
-            <button onClick={saveCv} disabled={savingCv || !cvText.trim()} className="w-full sm:w-auto bg-indigo-600 text-white text-sm px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 transition-all">
-              {savingCv ? "Guardando..." : "Guardar CV"}
-            </button>
+            
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button onClick={saveCv} disabled={savingCv || !cvText.trim()} className="flex-1 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-sm px-6 py-2.5 rounded-xl font-bold hover:bg-gray-800 dark:hover:bg-gray-200 disabled:opacity-50 transition-all text-center">
+                {savingCv ? "Guardando..." : "Guardar CV (Manual)"}
+              </button>
+              
+              <button onClick={extractCvFromLLM} disabled={extractingCv || !cvText.trim()} className="flex-[2] flex items-center justify-center gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-sm px-6 py-2.5 rounded-xl font-bold hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 transition-all active:scale-95">
+                {extractingCv ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                    </svg>
+                    Analizando CV con IA...
+                  </>
+                ) : (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L9.5 9.5 2 12l7.5 2.5L12 22l2.5-7.5L22 12l-7.5-2.5z"/></svg>
+                    Autocompletar Criterios con IA
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         )}
 
@@ -1041,12 +1236,12 @@ const TOKEN_PROVIDERS = {
   },
   nvidia: {
     name: "Nvidia NIM",
-    description: "Gemma 4 31B vía Nvidia NIM. Gratis con API key de build.nvidia.com.",
+    description: "Llama 3.1 8B Instruct vía Nvidia NIM. Gratis y rapidísimo.",
     placeholder: "nvapi-...",
     accent: "#76B900",
     bg: "#F2FFE0",
     border: "#C8F090",
-    docsUrl: "https://build.nvidia.com/google/gemma-4-31b-it",
+    docsUrl: "https://build.nvidia.com/meta/llama-3_1-8b-instruct",
     logo: (
       <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-7 h-7">
         <rect width="40" height="40" rx="8" fill="#76B900" />

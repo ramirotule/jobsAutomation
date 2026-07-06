@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { calculateHeuristicScore, ScoringResult } from "@/utils/scoring";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface LIPost {
@@ -37,6 +38,8 @@ interface LIPost {
 interface LIFiltered {
   relevant: LIPost[];
   review: LIPost[];
+  stretch: LIPost[];
+  down: LIPost[];
   discarded: LIPost[];
 }
 
@@ -54,6 +57,7 @@ interface LIUserConfig {
   title?: string;
   primary_skills?: string[];
   secondary_skills?: string[];
+  seniority?: string;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -86,32 +90,19 @@ function formatARDate(d: Date): string {
   return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())} hs`;
 }
 
-function sortLIPosts(posts: LIPost[], order: "newest" | "oldest"): LIPost[] {
+function sortLIPosts(posts: LIPost[], order: "score" | "newest" | "oldest", scores?: Record<string, ScoringResult>): LIPost[] {
+  if (order === "score" && scores) {
+    return [...posts].sort((a, b) => {
+      const sa = (a.id ? scores[a.id]?.score : undefined) ?? 0;
+      const sb = (b.id ? scores[b.id]?.score : undefined) ?? 0;
+      return sb - sa;
+    });
+  }
   return [...posts].sort((a, b) => {
     const da = parseLIDate(a.postedAt || a.publishedAt)?.getTime() ?? 0;
     const db = parseLIDate(b.postedAt || b.publishedAt)?.getTime() ?? 0;
     return order === "newest" ? db - da : da - db;
   });
-}
-
-function applyBlacklistFilter(
-  posts: LIPost[],
-  terms: string[],
-  threshold: number
-): LIFiltered {
-  const relevant: LIPost[] = [], review: LIPost[] = [], discarded: LIPost[] = [];
-  for (const post of posts) {
-    const text = (post.content ?? post.text ?? "").toLowerCase();
-    let hits = 0;
-    for (const term of terms) {
-      const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      hits += (text.match(new RegExp(escaped, "gi")) ?? []).length;
-    }
-    if (hits === 0) relevant.push(post);
-    else if (hits < threshold) review.push(post);
-    else discarded.push(post);
-  }
-  return { relevant, review, discarded };
 }
 
 const CACHE_KEY   = "li-posts-cache";
@@ -164,13 +155,12 @@ export default function BuscarEmpleoPage() {
   const [error, setError] = useState<string | null>(null);
   const [missingApifyKey, setMissingApifyKey] = useState(false);
   const [results, setResults] = useState<LIPost[]>([]);
-  const [filtered, setFiltered] = useState<LIFiltered>({ relevant: [], review: [], discarded: [] });
-  const [activeTab, setActiveTab] = useState<"relevant" | "review" | "discarded">("relevant");
-  const [sort, setSort] = useState<"newest" | "oldest">("newest");
+  const [filtered, setFiltered] = useState<LIFiltered>({ relevant: [], review: [], stretch: [], down: [], discarded: [] });
+  const [activeTab, setActiveTab] = useState<"relevant" | "review" | "stretch" | "down" | "discarded">("relevant");
+  const [sort, setSort] = useState<"score" | "newest" | "oldest">("score");
   const [textSearch, setTextSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [scoring, setScoring] = useState(false);
-  const [scores, setScores] = useState<Record<string, { score: number; reason: string }>>({});
+  const [scores, setScores] = useState<Record<string, ScoringResult>>({});
   const [config, setConfig] = useState<LIUserConfig | null>(null);
   const [ignored, setIgnored] = useState<Set<string>>(new Set());
   const [ignoredCount, setIgnoredCount] = useState(0);
@@ -206,10 +196,12 @@ export default function BuscarEmpleoPage() {
         setFiltered({
           relevant: filterIgnored(cache.filtered?.relevant ?? filteredResults, ign),
           review:   filterIgnored(cache.filtered?.review   ?? [], ign),
+          stretch:  filterIgnored(cache.filtered?.stretch  ?? [], ign),
+          down:     filterIgnored(cache.filtered?.down     ?? [], ign),
           discarded:filterIgnored(cache.filtered?.discarded ?? [], ign),
         });
         setScores(cache.scores ?? {});
-        setSort(cache.sort ?? "newest");
+        setSort(cache.sort ?? "score");
         setActiveTab(cache.activeTab ?? "relevant");
       }
     };
@@ -229,7 +221,7 @@ export default function BuscarEmpleoPage() {
     setLoading(true);
     setError(null);
     setResults([]);
-    setFiltered({ relevant: [], review: [], discarded: [] });
+    setFiltered({ relevant: [], review: [], stretch: [], down: [], discarded: [] });
     setScores({});
     setStatus("Iniciando búsqueda en LinkedIn...");
 
@@ -279,56 +271,43 @@ export default function BuscarEmpleoPage() {
             setIgnoredCount(raw.length - all.length);
             setResults(all);
 
-            const terms = config?.blacklist_terms ?? [];
-            const threshold = config?.blacklist_threshold ?? 2;
-            const fil = terms.length > 0
-              ? applyBlacklistFilter(all, terms, threshold)
-              : { relevant: all, review: [], discarded: [] };
-
+            // Calculate Heuristic Score for all active posts
+            const scoredPosts: { post: LIPost, result: ScoringResult }[] = [];
+            const newScores: Record<string, ScoringResult> = {};
+            
+            for (const p of all) {
+              const text = (p.content ?? p.text ?? "");
+              const res = calculateHeuristicScore(text, {
+                title: config?.title,
+                primary_skills: config?.primary_skills,
+                secondary_skills: config?.secondary_skills,
+                blacklist_terms: config?.blacklist_terms,
+                seniority: config?.seniority,
+              });
+              scoredPosts.push({ post: p, result: res });
+              if (p.id) newScores[p.id] = res;
+            }
+            
+            const relevant: LIPost[] = [];
+            const review: LIPost[] = [];
+            const stretch: LIPost[] = [];
+            const down: LIPost[] = [];
+            const discarded: LIPost[] = [];
+            
+            for (const { post, result } of scoredPosts) {
+              if (result.score < 0) discarded.push(post);
+              else if (result.seniorityMismatch === 'stretch') stretch.push(post);
+              else if (result.seniorityMismatch === 'down_level') down.push(post);
+              else if (result.score <= 30) review.push(post);
+              else relevant.push(post);
+            }
+            
+            const fil = { relevant, review, stretch, down, discarded };
+            setScores(newScores);
             setFiltered(fil);
             setActiveTab("relevant");
 
-            saveCache({ query, maxResults, results: all, filtered: fil, scores: {}, sort: "newest", activeTab: "relevant", savedAt: Date.now() });
-
-            // LLM scoring — pick key from per-provider tokens, fallback to legacy llm_api_key
-            const providerKeyMap: Record<string, string | undefined> = {
-              gemini: config?.gemini_key,
-              openai: config?.openai_key,
-              anthropic: config?.anthropic_key,
-            };
-            const resolvedKey = config?.llm_provider
-              ? (providerKeyMap[config.llm_provider] || config?.llm_api_key)
-              : config?.llm_api_key;
-
-            if (resolvedKey && config?.llm_provider && fil.relevant.length > 0) {
-              setScoring(true);
-              fetch("/api/linkedin-score", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  posts: fil.relevant,
-                  provider: config.llm_provider,
-                  apiKey: resolvedKey?.trim(),
-                  profile: { title: config.title, primary_skills: config.primary_skills, secondary_skills: config.secondary_skills },
-                }),
-              })
-                .then((r) => r.json())
-                .then((d) => {
-                  if (d.scores) {
-                    const map: Record<string, { score: number; reason: string }> = {};
-                    for (const s of d.scores) {
-                      const post = fil.relevant[s.index];
-                      const key = post?.id ?? String(s.index);
-                      map[key] = { score: s.score, reason: s.reason };
-                    }
-                    setScores(map);
-                    const cached = loadCache();
-                    if (cached) saveCache({ ...cached, scores: map });
-                  }
-                })
-                .catch(console.error)
-                .finally(() => setScoring(false));
-            }
+            saveCache({ query, maxResults, results: all, filtered: fil, scores: newScores, sort: "score", activeTab: "relevant", savedAt: Date.now() });
 
             setLoading(false);
             setStatus("");
@@ -360,7 +339,7 @@ export default function BuscarEmpleoPage() {
     const remove = (arr: LIPost[]) => arr.filter((p, i) => !selectedIds.has(p.id ?? String(i)));
     setResults((prev) => { const next = remove(prev); const cache = loadCache(); if (cache) saveCache({ ...cache, results: next }); return next; });
     setFiltered((prev) => {
-      const next = { relevant: remove(prev.relevant), review: remove(prev.review), discarded: remove(prev.discarded) };
+      const next = { relevant: remove(prev.relevant), review: remove(prev.review), stretch: remove(prev.stretch), down: remove(prev.down), discarded: remove(prev.discarded) };
       const cache = loadCache(); if (cache) saveCache({ ...cache, filtered: next }); return next;
     });
     setSelectedIds(new Set());
@@ -385,7 +364,7 @@ export default function BuscarEmpleoPage() {
     const remove = (arr: LIPost[]) => arr.filter((p) => postKey(p) !== key);
     setResults((prev) => { const n = remove(prev); const cache = loadCache(); if (cache) saveCache({ ...cache, results: n }); return n; });
     setFiltered((prev) => {
-      const n = { relevant: remove(prev.relevant), review: remove(prev.review), discarded: remove(prev.discarded) };
+      const n = { relevant: remove(prev.relevant), review: remove(prev.review), stretch: remove(prev.stretch), down: remove(prev.down), discarded: remove(prev.discarded) };
       const cache = loadCache(); if (cache) saveCache({ ...cache, filtered: n }); return n;
     });
   };
@@ -401,20 +380,20 @@ export default function BuscarEmpleoPage() {
     const remove = (arr: LIPost[]) => arr.filter((p) => (post.id ? p.id !== post.id : p !== post));
     setResults((prev) => { const next = remove(prev); const cache = loadCache(); if (cache) saveCache({ ...cache, results: next }); return next; });
     setFiltered((prev) => {
-      const next = { relevant: remove(prev.relevant), review: remove(prev.review), discarded: remove(prev.discarded) };
+      const next = { relevant: remove(prev.relevant), review: remove(prev.review), stretch: remove(prev.stretch), down: remove(prev.down), discarded: remove(prev.discarded) };
       const cache = loadCache();
       if (cache) saveCache({ ...cache, filtered: next });
       return next;
     });
   };
 
-  const hasBlacklist = (config?.blacklist_terms ?? []).length > 0;
   // Derived — declared before helpers that use them
-  const activePosts = (hasBlacklist
-    ? activeTab === "relevant" ? filtered.relevant
-      : activeTab === "review" ? filtered.review
-      : filtered.discarded
-    : results
+  const activePosts = (
+    activeTab === "relevant" ? filtered.relevant
+    : activeTab === "review" ? filtered.review
+    : activeTab === "stretch" ? filtered.stretch
+    : activeTab === "down" ? filtered.down
+    : filtered.discarded
   ).filter((p) => {
     if (!textSearch.trim()) return true;
     const q = textSearch.toLowerCase();
@@ -425,7 +404,7 @@ export default function BuscarEmpleoPage() {
     );
   });
 
-  const sortedPosts = sortLIPosts(activePosts, sort);
+  const sortedPosts = sortLIPosts(activePosts, sort, scores);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 overflow-x-hidden">
@@ -537,32 +516,23 @@ export default function BuscarEmpleoPage() {
         {results.length > 0 && (
           <>
             {/* Bucket tabs */}
-            {hasBlacklist && (
-              <div className="flex flex-wrap items-center gap-2 mb-4">
-                {([
-                  { key: "relevant", label: "Relevantes", count: filtered.relevant.length, cls: "bg-green-600 text-white" },
-                  { key: "review", label: "A revisar", count: filtered.review.length, cls: "bg-amber-500 text-white" },
-                  { key: "discarded", label: "Descartados", count: filtered.discarded.length, cls: "bg-red-500 text-white" },
-                ] as const).map((tab) => (
-                  <button
-                    key={tab.key}
-                    onClick={() => setActiveTab(tab.key)}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${activeTab === tab.key ? `${tab.cls} border-transparent shadow-sm` : "bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"}`}
-                  >
-                    {tab.label} <span className="opacity-70">({tab.count})</span>
-                  </button>
-                ))}
-                {scoring && (
-                  <span className="flex items-center gap-1.5 text-xs text-indigo-500 ml-1">
-                    <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                    Calculando scores...
-                  </span>
-                )}
-              </div>
-            )}
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              {([
+                { key: "relevant", label: "Relevantes (>30)", count: filtered.relevant.length, cls: "bg-green-600 text-white" },
+                { key: "review", label: "A revisar (0-30)", count: filtered.review.length, cls: "bg-amber-500 text-white" },
+                { key: "stretch", label: "🔥 Stretch Goal", count: filtered.stretch.length, cls: "bg-orange-600 text-white" },
+                { key: "down", label: "⬇️ Down Level", count: filtered.down.length, cls: "bg-blue-600 text-white" },
+                { key: "discarded", label: "Descartados (<0)", count: filtered.discarded.length, cls: "bg-red-500 text-white" },
+              ] as const).map((tab) => (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${activeTab === tab.key ? `${tab.cls} border-transparent shadow-sm` : "bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"}`}
+                >
+                  {tab.label} <span className="opacity-70">({tab.count})</span>
+                </button>
+              ))}
+            </div>
 
             {/* Sort + search + count */}
             <div className="flex flex-col gap-2 mb-4">
@@ -589,13 +559,13 @@ export default function BuscarEmpleoPage() {
 
               {/* Row 2: sort + count + badges + action buttons (scrollable) */}
               <div className="flex items-center gap-2 overflow-x-auto scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap">
-                {(["newest", "oldest"] as const).map((s) => (
+                {(["score", "newest", "oldest"] as const).map((s) => (
                   <button
                     key={s}
                     onClick={() => setSort(s)}
                     className={`shrink-0 text-xs px-3 py-1.5 rounded-lg border transition-all ${sort === s ? "bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 border-gray-900 dark:border-gray-100" : "bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"}`}
                   >
-                    {s === "newest" ? "Más reciente" : "Más antiguo"}
+                    {s === "score" ? "Mejor match" : s === "newest" ? "Más reciente" : "Más antiguo"}
                   </button>
                 ))}
                 <span className="shrink-0 text-xs text-gray-400 dark:text-gray-500 font-medium">{activePosts.length} posts</span>
@@ -650,7 +620,7 @@ export default function BuscarEmpleoPage() {
                   key={post.id ?? idx}
                   post={post}
                   config={config}
-                  score={(!hasBlacklist || activeTab === "relevant") && post.id ? scores[post.id] : undefined}
+                  score={post.id ? scores[post.id] : undefined}
                   dimmed={activeTab === "discarded"}
                   selected={selectedIds.has(post.id ?? String(idx))}
                   onToggleSelect={() => toggleSelect(post.id ?? String(idx))}
@@ -695,7 +665,7 @@ export default function BuscarEmpleoPage() {
 // ── Post Modal ────────────────────────────────────────────────────────────────
 function PostModal({
   post,
-  score: initialScore,
+  score,
   config,
   onClose,
   onIgnore,
@@ -703,18 +673,14 @@ function PostModal({
   onApply,
 }: {
   post: LIPost;
-  score?: { score: number; reason: string };
+  score?: ScoringResult;
   config: LIUserConfig | null;
   onClose: () => void;
   onIgnore: () => void;
   onDelete: () => void;
   onApply: () => void;
 }) {
-  const [aiScore, setAiScore] = useState<{ score: number; reason: string } | null>(initialScore ?? null);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const [contactOpen, setContactOpen] = useState(false);
-  const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
   const [contactEmail, setContactEmail] = useState("");
 
   const authorName = post.author?.name || "Usuario de LinkedIn";
@@ -732,7 +698,6 @@ function PostModal({
   const likes = post.engagement?.likes ?? 0;
   const comments = post.engagement?.comments ?? 0;
   const shares = post.engagement?.shares ?? 0;
-  const firstImage = post.postImages?.[0]?.url;
 
   // Contact helpers
   const liVanity = authorUrl?.match(/linkedin\.com\/in\/([^/?#]+)/)?.[1] ?? null;
@@ -749,67 +714,8 @@ function PostModal({
     window.open(`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(contactEmail)}&su=${subject}&body=${body}`, "_blank", "noopener,noreferrer");
   }
 
-  const scoreValue = aiScore?.score ?? 0;
-  const scoreColor = !aiScore ? "" : scoreValue >= 70 ? "text-green-500 dark:text-green-400" : scoreValue >= 40 ? "text-amber-400" : "text-red-400";
-  const scoreBarColor = !aiScore ? "" : scoreValue >= 70 ? "bg-green-500" : scoreValue >= 40 ? "bg-amber-400" : "bg-red-400";
-
-  const providerKeyMap: Record<string, string | undefined> = {
-    gemini: config?.gemini_key,
-    openai: config?.openai_key,
-    anthropic: config?.anthropic_key,
-    nvidia: config?.llm_api_key,
-  };
-  const availableProviders = Object.entries(providerKeyMap)
-    .filter(([, k]) => k && k.trim().length > 0)
-    .map(([p]) => p);
-  const defaultProvider = config?.llm_provider && providerKeyMap[config.llm_provider]
-    ? config.llm_provider
-    : availableProviders[0] ?? null;
-  const effectiveProvider = selectedProvider ?? defaultProvider;
-  const resolvedKey = effectiveProvider ? providerKeyMap[effectiveProvider] : null;
-  const canAnalyze = !!(resolvedKey && effectiveProvider);
-
-  async function analyze() {
-    setAnalyzeError(null);
-    if (!effectiveProvider) {
-      setAnalyzeError("No tenés un proveedor de IA configurado. Guardá tu API key en Perfil → Tokens.");
-      return;
-    }
-    if (!resolvedKey) {
-      setAnalyzeError(`Falta la API key de ${effectiveProvider}. Configurala en Perfil → Tokens.`);
-      return;
-    }
-    if (!postText.trim()) {
-      setAnalyzeError("Este post no tiene contenido para analizar.");
-      return;
-    }
-    setAnalyzing(true);
-    try {
-      const res = await fetch("/api/linkedin-score", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          posts: [{ id: post.id, text: postText }],
-          provider: effectiveProvider!,
-          apiKey: resolvedKey?.trim(),
-          profile: {
-            title: config?.title,
-            primary_skills: config?.primary_skills,
-            secondary_skills: config?.secondary_skills,
-            blacklist_terms: config?.blacklist_terms,
-          },
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      const s = data.scores?.[0];
-      if (s) setAiScore({ score: s.score, reason: s.reason });
-    } catch (e: any) {
-      setAnalyzeError(e.message);
-    } finally {
-      setAnalyzing(false);
-    }
-  }
+  const scoreValue = score?.score ?? 0;
+  const scoreColor = !score ? "" : scoreValue >= 70 ? "text-green-500 dark:text-green-400" : scoreValue >= 40 ? "text-amber-400" : "text-red-400";
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -941,107 +847,33 @@ function PostModal({
               </div>
             )}
           </div>
-
-        </div>
-
-        {/* ── AI result / error — floating overlay centrado en el modal ── */}
-        {(aiScore || analyzeError) && (
-          <div className="absolute inset-0 flex items-center justify-center p-6 pointer-events-none z-10">
-            <div className="pointer-events-auto w-full max-w-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-2xl p-5 space-y-4">
-
-              {/* close */}
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500">
-                  {analyzeError ? "Error" : "Resultado IA"}
-                </span>
-                <button
-                  onClick={() => { setAiScore(null); setAnalyzeError(null); }}
-                  className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                  </svg>
-                </button>
-              </div>
-
-              {analyzeError && (
-                <div className="space-y-3">
-                  <p className="text-sm text-red-600 dark:text-red-400 leading-relaxed">{analyzeError}</p>
-                  <a
-                    href="/perfil?tab=tokens"
-                    className="flex items-center justify-center gap-2 w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold transition-colors"
-                  >
-                    Ir a configurar tokens →
-                  </a>
-                </div>
-              )}
-
-              {aiScore && (
-                <>
-                  <div className="flex items-center gap-4">
-                    <span className={`font-black text-5xl leading-none tabular-nums ${scoreColor}`}>{aiScore.score}</span>
-                    <div className="flex-1 space-y-1.5">
-                      <div className="flex justify-between text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-                        <span>Match</span><span>/100</span>
-                      </div>
-                      <div className="w-full h-2.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full transition-all duration-700 ${scoreBarColor}`} style={{ width: `${aiScore.score}%` }} />
-                      </div>
-                    </div>
-                  </div>
-                  <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">{aiScore.reason}</p>
-                </>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Footer actions */}
-        <div className="shrink-0 border-t border-gray-100 dark:border-gray-800 px-5 py-4 flex flex-col gap-2">
-          {availableProviders.length > 1 && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">Modelo:</span>
-              <div className="flex gap-1 flex-wrap">
-                {availableProviders.map(p => (
-                  <button
-                    key={p}
-                    onClick={() => setSelectedProvider(p)}
-                    className={`text-xs px-2.5 py-1 rounded-lg font-medium border transition-all ${
-                      effectiveProvider === p
-                        ? "bg-indigo-600 text-white border-indigo-600"
-                        : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-indigo-400"
-                    }`}
-                  >
-                    {p === "nvidia" ? "Nvidia / Gemma 4" : p === "gemini" ? "Gemini" : p === "openai" ? "OpenAI" : "Anthropic"}
-                  </button>
+          
+          {/* Detailed Matches Section */}
+          {score && score.matches.length > 0 && (
+            <div className="bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl p-4 mt-4">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-3">Detalle del Score ({score.score})</h4>
+              <div className="flex flex-wrap gap-2">
+                {score.matches.map((m, i) => (
+                  <span key={i} className={`text-xs px-2.5 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 ${m.points > 0 ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400" : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400"}`}>
+                    {m.term}
+                    <span className="opacity-70 font-bold ml-1">{m.points > 0 ? '+' : ''}{m.points}</span>
+                  </span>
                 ))}
               </div>
             </div>
           )}
-          {/* Primary actions row */}
+
+        </div>
+
+        {/* Footer actions */}
+        <div className="shrink-0 border-t border-gray-100 dark:border-gray-800 px-5 py-4 flex flex-col gap-2">
+          {/* Actions row */}
           <div className="flex gap-2">
-            <button
-              onClick={analyze}
-              disabled={analyzing}
-              className="flex-1 flex items-center justify-center gap-2 text-sm font-bold py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-60 text-white transition-all active:scale-95 whitespace-nowrap"
-            >
-              {analyzing ? (
-                <>
-                  <svg className="animate-spin h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                  </svg>
-                  Analizando...
-                </>
-              ) : (
-                <>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-                    <path d="M12 2L9.5 9.5 2 12l7.5 2.5L12 22l2.5-7.5L22 12l-7.5-2.5z"/>
-                  </svg>
-                  {aiScore ? "Re-analizar" : "Analizar con IA"}
-                </>
-              )}
-            </button>
+            <a href={postLink} target="_blank" rel="noopener noreferrer"
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-[#0a66c2]/30 dark:border-gray-700 text-[#0a66c2] dark:text-[#5b9fd4] hover:bg-blue-50 dark:hover:bg-gray-800 transition-all text-sm font-bold"
+              title="Ver en LinkedIn">
+              LinkedIn
+            </a>
             <button
               onClick={() => { onApply(); onClose(); }}
               className="flex-1 text-sm font-bold py-2.5 rounded-xl bg-gray-900 dark:bg-gray-700 text-white hover:bg-indigo-600 transition-all active:scale-95 whitespace-nowrap"
@@ -1050,32 +882,15 @@ function PostModal({
             </button>
           </div>
 
-          {/* Secondary actions row */}
-          <div className="flex gap-2">
-            <a href={postLink} target="_blank" rel="noopener noreferrer"
-              className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-[#0a66c2] dark:text-[#5b9fd4] hover:bg-blue-50 dark:hover:bg-blue-950 transition-all text-xs font-medium"
-              title="Ver en LinkedIn">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-              </svg>
-              LinkedIn
-            </a>
+          <div className="flex gap-2 mt-1">
             <button onClick={() => { onIgnore(); onClose(); }}
               className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all text-xs font-medium"
               title="Ignorar para siempre">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-                <line x1="1" y1="1" x2="23" y2="23"/>
-              </svg>
               Ignorar
             </button>
             <button onClick={() => { onDelete(); onClose(); }}
               className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 transition-all text-xs font-medium"
               title="Eliminar">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="3 6 5 6 21 6"/>
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-              </svg>
               Eliminar
             </button>
           </div>
@@ -1098,7 +913,7 @@ function PostCard({
   onApply,
 }: {
   post: LIPost;
-  score?: { score: number; reason: string };
+  score?: ScoringResult;
   config: LIUserConfig | null;
   dimmed?: boolean;
   selected?: boolean;
@@ -1138,8 +953,6 @@ function PostCard({
     score.score >= 70 ? "text-green-600" :
     score.score >= 40 ? "text-amber-500" :
     "text-red-500";
-
-  const firstImage = post.postImages?.[0]?.url;
 
   return (
     <>
@@ -1297,14 +1110,23 @@ function PostCard({
 
           {/* Score */}
           {score && (
-            <div className="flex items-start gap-2 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl px-3 py-2">
-              <span className={`font-black text-base leading-none shrink-0 ${scoreColor}`}>{score.score}</span>
-              <span className="text-[11px] text-gray-500 dark:text-gray-400 leading-tight line-clamp-2">{score.reason}</span>
+            <div className="flex flex-col gap-2 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl px-3 py-2">
+              <div className="flex items-center gap-2">
+                <span className={`font-black text-base leading-none shrink-0 ${scoreColor}`}>{score.score}</span>
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Match Score</span>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {score.matches.map((m, i) => (
+                  <span key={i} className={`text-[9px] px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider ${m.points > 0 ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400" : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400"}`}>
+                    {m.term}
+                  </span>
+                ))}
+              </div>
             </div>
           )}
 
           {/* Actions */}
-          <div className="flex gap-2">
+          <div className="flex gap-2 mt-1">
             <a
               href={postLink}
               target="_blank"
