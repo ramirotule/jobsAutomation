@@ -3,7 +3,28 @@ from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from jobspy import scrape_jobs
+from jobspy.jobs import Country
 import pandas as pd
+
+# python-jobspy's Country enum only covers ~65 countries. When scraping
+# worldwide-remote, LinkedIn's own per-listing location parser
+# (scrapers/linkedin/__init__.py:_get_location) calls Country.from_string()
+# on EACH job's own country text — if that job happens to be in a country
+# missing from the enum (Armenia, Bulgaria, Slovakia, etc. all aren't
+# there), it raises and aborts the ENTIRE scrape, not just that one job.
+# Patched here (not by editing the installed package) so the fix survives
+# a fresh `pip install -r requirements.txt` on redeploy.
+_original_country_from_string = Country.from_string.__func__
+
+
+def _safe_country_from_string(cls, country_str: str):
+    try:
+        return _original_country_from_string(cls, country_str)
+    except ValueError:
+        return cls.WORLDWIDE
+
+
+Country.from_string = classmethod(_safe_country_from_string)
 
 app = FastAPI(title="JobSpy API", version="1.0.0")
 
@@ -32,9 +53,22 @@ class SearchRequest(BaseModel):
     is_remote: bool = Field(default=True, description="Remote jobs only")
     results_wanted: int = Field(default=50, ge=5, le=100, description="Max results per site")
     hours_old: int = Field(default=24, ge=1, le=168, description="Max age in hours")
-    country_indeed: str = Field(default="", description="Country for Indeed")
     exclude_companies: list[str] = Field(default=[], description="Companies to exclude (lowercase)")
     exclude_locations: list[str] = Field(default=["brazil", "brasil"], description="Locations to exclude")
+
+
+# Indeed has no "region" concept — it's strictly per-country, so "Latin
+# America" isn't a valid country_indeed value there (confirmed: raises
+# "Invalid country string"). LinkedIn's own location search DOES resolve
+# "Latin America" as a real free-text location (verified manually — returns
+# genuine LatAm results: Peru, Mexico, Brazil, Argentina). So Indeed needs a
+# loop over each LatAm country jobspy actually supports; LinkedIn gets it in
+# one shot.
+LATAM_COUNTRIES = [
+    "argentina", "brazil", "chile", "colombia", "costa rica",
+    "ecuador", "mexico", "panama", "peru", "uruguay", "venezuela",
+]
+LATAM_LOCATION = "Latin America"
 
 
 class JobResult(BaseModel):
@@ -61,30 +95,47 @@ def health():
 @app.post("/search", dependencies=[Depends(verify_api_key)])
 def search_jobs(req: SearchRequest):
     try:
-        # When remote, use "worldwide" instead of the raw location string
-        location = req.location
-        if req.is_remote or location.lower() == "remote":
-            location = "worldwide"
+        sites_lower = [s.lower() for s in req.sites]
+        non_indeed_sites = [s for s in req.sites if s.lower() != "indeed"]
 
-        scrape_params: dict = {
-            "site_name": req.sites,
-            "location": location,
-            "is_remote": req.is_remote,
-            "job_type": "fulltime",
-            "results_wanted": req.results_wanted,
-            "hours_old": req.hours_old,
-        }
+        dataframes = []
 
-        if req.country_indeed:
-            scrape_params["country_indeed"] = req.country_indeed
+        # LinkedIn (and any other non-Indeed site): one call, LatAm as a region.
+        if non_indeed_sites:
+            scrape_params: dict = {
+                "site_name": non_indeed_sites,
+                "location": LATAM_LOCATION,
+                "is_remote": req.is_remote,
+                "job_type": "fulltime",
+                "results_wanted": req.results_wanted,
+                "hours_old": req.hours_old,
+                "search_term": req.query,
+            }
+            df_main = scrape_jobs(**scrape_params)
+            if not df_main.empty:
+                dataframes.append(df_main)
 
-        # Google requires google_search_term instead of search_term
-        if "google" in req.sites:
-            scrape_params["google_search_term"] = req.query
-        else:
-            scrape_params["search_term"] = req.query
+        # Indeed: no region concept, loop per LatAm country and merge.
+        if "indeed" in sites_lower:
+            per_country_wanted = max(5, min(req.results_wanted, 15))
+            for country in LATAM_COUNTRIES:
+                try:
+                    df_country = scrape_jobs(
+                        site_name=["indeed"],
+                        location=country,
+                        is_remote=req.is_remote,
+                        job_type="fulltime",
+                        results_wanted=per_country_wanted,
+                        hours_old=req.hours_old,
+                        country_indeed=country,
+                        search_term=req.query,
+                    )
+                    if not df_country.empty:
+                        dataframes.append(df_country)
+                except Exception as e:
+                    print(f"[Indeed:{country}] skipped due to error: {e}")
 
-        df = scrape_jobs(**scrape_params)
+        df = pd.concat(dataframes, ignore_index=True) if dataframes else pd.DataFrame()
 
         if df.empty:
             return {"success": True, "count": 0, "data": [], "message": "No jobs found"}
@@ -119,14 +170,19 @@ def search_jobs(req: SearchRequest):
                 continue
 
             # Detect remote honestly, per row: prefer jobspy's own is_remote column
-            # (populated from the site's own data when available), falling back to a
-            # location-text heuristic only if that column is missing.
+            # (populated from the site's own data when available). LinkedIn never
+            # fills this column (always None), so fall back to a text heuristic —
+            # and check the TITLE too, not just location: sites commonly write
+            # "Remote" in the title (e.g. "Mobile Engineer (React Native) - Remote,
+            # Vietnam") rather than in the structured location field.
             raw_is_remote = row.get("is_remote")
+            remote_keywords = ("remote", "remoto", "home office")
             if pd.notnull(raw_is_remote):
                 is_remote_job = bool(raw_is_remote)
             else:
+                title_lower = title.lower()
                 is_remote_job = any(
-                    kw in location_lower for kw in ("remote", "remoto", "home office")
+                    kw in location_lower or kw in title_lower for kw in remote_keywords
                 )
 
             # When remote-only was requested, actually enforce it instead of just

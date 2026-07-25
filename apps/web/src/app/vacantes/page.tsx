@@ -11,7 +11,6 @@ import {
 } from "@/lib/supabase";
 import { saveApplication, getApplications } from "@/lib/applications";
 import { AlertModal, ConfirmModal } from "@/components/Modal";
-import { supabase } from "@/lib/supabase";
 import type { JobPost, JobFilters } from "@/types";
 
 const TODAY = new Date().toISOString().split("T")[0];
@@ -47,23 +46,7 @@ export default function VacantesPage() {
   const [tailoring, setTailoring] = useState<string | null>(null);
   const [tailorResult, setTailorResult] = useState<any>(null);
   const [batchProgress, setBatchProgress] = useState<{ total: number; processed: number; isComplete: boolean } | null>(null);
-  const [apifyKey, setApifyKey] = useState<string | undefined>(undefined);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
-  const computrabajoPollRef = useRef<NodeJS.Timeout | null>(null);
-
-  useEffect(() => {
-    const loadApifyKey = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data } = await supabase
-        .from("search_profiles")
-        .select("apify_key")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      if (data?.apify_key) setApifyKey(data.apify_key);
-    };
-    loadApifyKey();
-  }, []);
 
   const PAGE_SIZE = 25;
 
@@ -304,101 +287,21 @@ export default function VacantesPage() {
 
   // Computrabajo runs as an async Apify actor (no synchronous API exists) — this
   // polls the run to completion, mirroring /buscar-empleo's linkedin-test flow.
-  const handleComputrabajoSearch = (query: string, remoteOnly: boolean) => {
-    if (computrabajoPollRef.current) { clearTimeout(computrabajoPollRef.current); computrabajoPollRef.current = null; }
-    setIsScraping('computrabajo');
-
-    const start = async () => {
-      try {
-        const startRes = await fetch('/api/computrabajo-search', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'start', searchQuery: query, maxResults: 50, token: apifyKey }),
-        });
-        const startData = await startRes.json();
-        if (startRes.status === 402 && startData.error === 'apify_key_missing') {
-          setAlertMsg('Configurá tu token de Apify en Perfil → Tokens para buscar en Computrabajo.');
-          setIsScraping(null);
-          return;
-        }
-        if (!startRes.ok) throw new Error(startData.error || 'No se pudo iniciar la búsqueda en Computrabajo.');
-
-        const { runId, datasetId } = startData;
-        let attempts = 0;
-
-        const poll = async () => {
-          attempts++;
-          if (attempts > 100) {
-            setAlertMsg('Tiempo de espera agotado buscando en Computrabajo.');
-            setIsScraping(null);
-            return;
-          }
-          try {
-            const statusRes = await fetch('/api/computrabajo-search', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ action: 'status', runId, datasetId, token: apifyKey, remoteOnly }),
-            });
-            const statusData = await statusRes.json();
-            if (!statusRes.ok) throw new Error(statusData.error);
-
-            if (statusData.status === 'SUCCEEDED') {
-              await fetchJobs();
-              if (statusData.count > 0) {
-                triggerBatchMatch();
-                setAlertMsg(`${statusData.count} vacantes nuevas encontradas en Computrabajo. Analizando con IA...`);
-              } else {
-                setAlertMsg(statusData.message || 'Sin resultados nuevos en Computrabajo.');
-              }
-              setIsScraping(null);
-              return;
-            }
-
-            if (['FAILED', 'ABORTED', 'TIMED-OUT'].includes(statusData.status)) {
-              setAlertMsg(statusData.error || `Computrabajo terminó con estado: ${statusData.status}`);
-              setIsScraping(null);
-              return;
-            }
-
-            computrabajoPollRef.current = setTimeout(poll, 3000);
-          } catch (err: any) {
-            setAlertMsg('Error consultando Computrabajo: ' + err.message);
-            setIsScraping(null);
-          }
-        };
-
-        computrabajoPollRef.current = setTimeout(poll, 3000);
-      } catch (err: any) {
-        setAlertMsg('Error buscando en Computrabajo: ' + err.message);
-        setIsScraping(null);
-      }
-    };
-
-    start();
-  };
-
-  const handleJobSearch = async (query: string, location: string, datePosted: string, remoteOnly: boolean, provider: string) => {
-    if (provider === 'computrabajo') {
-      handleComputrabajoSearch(query, remoteOnly);
-      return;
-    }
-
-    setIsScraping(provider);
+  // JobSpy is the only provider — results are shown exactly as it returns them,
+  // no automatic AI matching after a search.
+  const handleJobSearch = async (query: string, datePosted: string) => {
+    setIsScraping('jobspy');
     try {
       const res = await fetch('/api/jobs/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, location, datePosted, remoteOnly, provider }),
+        // Always remote, worldwide — no location/remote toggle in the UI anymore.
+        body: JSON.stringify({ query, location: 'Remote', datePosted, remoteOnly: true }),
       });
       const data = await res.json();
       if (res.ok && data.success) {
         await fetchJobs();
-        if (data.count > 0) {
-          triggerBatchMatch();
-          setAlertMsg(`${data.count} new jobs found! AI matching started...`);
-        } else {
-          setAlertMsg(data.message || 'No new results.');
-        }
+        setAlertMsg(data.count > 0 ? `${data.count} vacantes nuevas encontradas.` : (data.message || 'Sin resultados nuevos.'));
       } else {
         throw new Error(data.error || data.message || 'Unknown error');
       }
@@ -455,9 +358,9 @@ export default function VacantesPage() {
       <JobSearchModal
         open={showSearchModal}
         onClose={() => setShowSearchModal(false)}
-        onConfirm={(query, location, datePosted, remoteOnly, provider) => {
+        onConfirm={(query, datePosted) => {
           setShowSearchModal(false);
-          handleJobSearch(query, location, datePosted, remoteOnly, provider);
+          handleJobSearch(query, datePosted);
         }}
       />
       <TailorResultModal
@@ -1047,64 +950,10 @@ function JobSearchModal({
 }: {
   open: boolean;
   onClose: () => void;
-  onConfirm: (query: string, location: string, datePosted: string, remoteOnly: boolean, provider: string) => void;
+  onConfirm: (query: string, datePosted: string) => void;
 }) {
   const [query, setQuery] = useState('frontend developer');
-  const [location, setLocation] = useState('Argentina');
   const [datePosted, setDatePosted] = useState('week');
-  const [remoteOnly, setRemoteOnly] = useState(true);
-  const [provider, setProvider] = useState('linkedin-api');
-
-  const PROVIDERS: {
-    value: string;
-    label: string;
-    desc: string;
-    icon: React.ReactNode;
-  }[] = [
-    {
-      value: 'linkedin-api',
-      label: 'LinkedIn',
-      desc: 'Búsqueda directa en LinkedIn (RapidAPI)',
-      icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
-        </svg>
-      ),
-    },
-    {
-      value: 'indeed',
-      label: 'Indeed',
-      desc: 'Vía JobSpy — sin API oficial (Indeed la discontinuó)',
-      icon: <span className="font-black text-lg" style={{ color: '#2164f3' }}>in</span>,
-    },
-    {
-      value: 'glassdoor',
-      label: 'Glassdoor',
-      desc: 'Vía JobSpy — sin API oficial pública',
-      icon: <span className="font-black text-lg" style={{ color: '#0caa41' }}>G</span>,
-    },
-    {
-      value: 'getonboard',
-      label: 'GetOnBoard',
-      desc: 'API pública oficial — LatAm tech jobs',
-      icon: <span className="font-black text-lg" style={{ color: '#7c3aed' }}>GB</span>,
-    },
-    {
-      value: 'computrabajo',
-      label: 'Computrabajo',
-      desc: 'Vía Apify — sin API oficial (usa tu token)',
-      icon: <span className="font-black text-lg" style={{ color: '#f26522' }}>C</span>,
-    },
-  ];
-
-  const LOCATIONS = [
-    { value: 'Argentina', label: 'Argentina' },
-    { value: 'United States', label: 'USA' },
-    { value: 'España', label: 'Spain' },
-    { value: 'México', label: 'Mexico' },
-    { value: 'Colombia', label: 'Colombia' },
-    { value: 'Remote', label: 'Remote' },
-  ];
 
   const DATE_OPTIONS = [
     { value: 'hour', label: 'Última hora' },
@@ -1132,33 +981,11 @@ function JobSearchModal({
           </div>
           <div>
             <h2 className="text-xl font-bold text-gray-900 tracking-tight">Buscar vacantes</h2>
-            <p className="text-xs text-gray-500 font-medium">{PROVIDERS.find(p => p.value === provider)?.desc}</p>
+            <p className="text-xs text-gray-500 font-medium">JobSpy — LinkedIn + Indeed</p>
           </div>
         </div>
 
         <div className="space-y-5">
-          <div>
-            <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">
-              Fuente
-            </label>
-            <div className="flex gap-2">
-              {PROVIDERS.map((p) => (
-                <button
-                  key={p.value}
-                  onClick={() => setProvider(p.value)}
-                  title={p.label}
-                  className={`flex-1 flex items-center justify-center h-12 rounded-xl border-2 transition-all ${
-                    provider === p.value
-                      ? 'border-indigo-600 bg-indigo-50'
-                      : 'border-gray-100 bg-gray-50 hover:border-gray-200 grayscale opacity-60 hover:opacity-100 hover:grayscale-0'
-                  }`}
-                >
-                  {p.icon}
-                </button>
-              ))}
-            </div>
-          </div>
-
           <div>
             <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">
               Búsqueda
@@ -1171,27 +998,6 @@ function JobSearchModal({
               className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 text-sm focus:bg-white focus:ring-4 focus:ring-indigo-50 focus:border-indigo-200 transition-all outline-none font-medium text-gray-700"
               autoFocus
             />
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">
-              Ubicación
-            </label>
-            <div className="grid grid-cols-3 gap-2">
-              {LOCATIONS.map((l) => (
-                <button
-                  key={l.value}
-                  onClick={() => setLocation(l.value)}
-                  className={`flex items-center justify-center gap-1 p-2.5 rounded-xl border-2 text-xs font-bold transition-all ${
-                    location === l.value
-                      ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                      : 'border-gray-100 bg-gray-50 text-gray-400 hover:border-gray-200'
-                  }`}
-                >
-                  {l.label}
-                </button>
-              ))}
-            </div>
           </div>
 
           <div>
@@ -1215,21 +1021,12 @@ function JobSearchModal({
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setRemoteOnly(!remoteOnly)}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                remoteOnly ? 'bg-indigo-600' : 'bg-gray-200'
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  remoteOnly ? 'translate-x-6' : 'translate-x-1'
-                }`}
-              />
-            </button>
-            <span className="text-sm font-bold text-gray-600">Solo remoto</span>
-          </div>
+          <p className="text-xs text-gray-400 font-medium flex items-center gap-1.5">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+            </svg>
+            Siempre busca remoto, en todos los países
+          </p>
         </div>
 
         <div className="mt-8 flex gap-3">
@@ -1240,7 +1037,7 @@ function JobSearchModal({
             Cancelar
           </button>
           <button
-            onClick={() => onConfirm(query, location, datePosted, remoteOnly, provider)}
+            onClick={() => onConfirm(query, datePosted)}
             disabled={!query.trim()}
             className="flex-[2] bg-indigo-600 text-white text-sm font-bold py-3.5 rounded-2xl hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50 disabled:grayscale"
           >
