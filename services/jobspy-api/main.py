@@ -118,8 +118,21 @@ def search_jobs(req: SearchRequest):
             if any(exc in location_lower for exc in exclude_locations_lower):
                 continue
 
-            # Detect remote from location text
-            is_remote_job = req.is_remote or "remote" in location_lower
+            # Detect remote honestly, per row: prefer jobspy's own is_remote column
+            # (populated from the site's own data when available), falling back to a
+            # location-text heuristic only if that column is missing.
+            raw_is_remote = row.get("is_remote")
+            if pd.notnull(raw_is_remote):
+                is_remote_job = bool(raw_is_remote)
+            else:
+                is_remote_job = any(
+                    kw in location_lower for kw in ("remote", "remoto", "home office")
+                )
+
+            # When remote-only was requested, actually enforce it instead of just
+            # labeling every result "remote" regardless of the real job.
+            if req.is_remote and not is_remote_job:
+                continue
 
             # Parse salary
             salary_min = _num(row, "min_amount")

@@ -176,7 +176,7 @@ export default function PostulacionesPage() {
         </div>
       )}
 
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 overflow-x-hidden">
         <div className="max-w-4xl mx-auto px-4 py-5 lg:py-8 pb-32">
 
           {/* Header */}

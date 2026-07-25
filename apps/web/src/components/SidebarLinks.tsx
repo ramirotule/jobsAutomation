@@ -11,7 +11,8 @@ interface NavLink {
 
 const NAV_LINKS: NavLink[] = [
   { href: "/", label: "Dashboard", icon: "📊" },
-  { href: "/buscar-empleo", label: "Buscar Empleo", icon: "🔍" },
+  { href: "/buscar-empleo", label: "Buscar Posts", icon: "🔍" },
+  { href: "/vacantes", label: "Buscar Trabajos", icon: "💼" },
   { href: "/postulaciones", label: "Postulaciones", icon: "🚀" },
   { href: "/configuracion", label: "Alertas", icon: "🔔" },
   { href: "/perfil", label: "Perfil", icon: "🧑‍💻" },

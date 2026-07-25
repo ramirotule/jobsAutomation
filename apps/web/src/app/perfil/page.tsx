@@ -529,14 +529,14 @@ function PerfilPageContent() {
             {/* ── Apify ──────────────────────────────────────────── */}
             <div className="space-y-3">
               <div>
-                <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">Buscar Empleo</h2>
-                <p className="text-xs text-slate-400 mt-0.5">Requerido para que funcione la búsqueda de posts en LinkedIn.</p>
+                <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">Buscar Posts / Buscar Trabajos</h2>
+                <p className="text-xs text-slate-400 mt-0.5">Requerido para la búsqueda de posts en LinkedIn y para la fuente Computrabajo.</p>
               </div>
               <div className="rounded-2xl border border-orange-200 bg-orange-50 overflow-hidden">
                 {/* Instrucciones */}
                 <div className="px-5 py-4 text-xs text-orange-800 space-y-3 border-b border-orange-200">
                   <p className="font-bold text-sm">Cómo obtener tu Apify token</p>
-                  <p>Apify corre el scraper que busca posts de trabajo en LinkedIn. Sin este token la sección <span className="font-bold">Buscar Empleo</span> no va a funcionar.</p>
+                  <p>Apify corre el scraper que busca posts de trabajo en LinkedIn y la búsqueda en Computrabajo. Sin este token las secciones <span className="font-bold">Buscar Posts</span> y <span className="font-bold">Buscar Trabajos → Computrabajo</span> no van a funcionar.</p>
                   <ol className="space-y-2 list-none">
                     <li className="flex gap-2">
                       <span className="shrink-0 font-bold bg-orange-200 text-orange-700 rounded-full w-5 h-5 flex items-center justify-center text-[10px]">1</span>
@@ -971,7 +971,7 @@ function TagInput({
 const TOKEN_PROVIDERS = {
   apify: {
     name: "Apify",
-    description: "Alimenta la sección Buscar Empleo: busca posts de trabajo en LinkedIn. Sin este token esa búsqueda no funciona.",
+    description: "Alimenta Buscar Posts (LinkedIn) y la fuente Computrabajo en Buscar Trabajos. Sin este token esas búsquedas no funcionan.",
     placeholder: "apify_api_...",
     accent: "#FF7518",
     bg: "#FFF4EC",

@@ -74,7 +74,7 @@ export default async function RootLayout({
         />
       </head>
       <body
-        className={`${inter.className} bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100`}
+        className={`${inter.className} bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 overflow-x-hidden`}
         suppressHydrationWarning
       >
         <ThemeProvider>

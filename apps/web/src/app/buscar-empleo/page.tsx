@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { getApplications, saveApplication, type StoredApplication } from "@/lib/applications";
+import { getIgnoredPostKeys, ignorePostRemote, clearIgnoredPostsRemote } from "@/lib/ignoredPosts";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface LIPost {
@@ -84,6 +86,116 @@ function parseLIDate(raw: LIDateField): Date | null {
 function formatARDate(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())} hs`;
+}
+
+const PORTFOLIO_URL = "www.ramirotoulemonde.com.ar";
+
+function buildGmailComposeUrl(email: string, role: string, company: string): string {
+  const subject = encodeURIComponent(`Postulación — ${role}`);
+  const body = encodeURIComponent(
+    `Hola ${company},\n\nVi tu publicación en LinkedIn y me gustaría postularme para el rol de ${role}.\n\nTe paso mi portfolio ${PORTFOLIO_URL} en donde podrás descargar mi CV actualizado y conocer mi experiencia laboral.\n\nSaludos y gracias por el tiempo.\n\nRamiro Santiago Toulemonde`
+  );
+  return `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(email)}&su=${subject}&body=${body}`;
+}
+
+const LINK_OR_EMAIL_PATTERN = /(https?:\/\/[^\s<>"')\]]+|[\w.+-]+@[\w-]+\.[a-zA-Z.]{2,})/g;
+const EMAIL_PATTERN = /^[\w.+-]+@[\w-]+\.[a-zA-Z.]{2,}$/;
+
+function linkifyText(text: string, emailContext?: { role: string; company: string }) {
+  return text.split(LINK_OR_EMAIL_PATTERN).map((part, i) => {
+    if (/^https?:\/\//.test(part)) {
+      return (
+        <a
+          key={i}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={e => e.stopPropagation()}
+          className="text-indigo-600 dark:text-indigo-400 hover:underline break-all"
+        >
+          {part}
+        </a>
+      );
+    }
+    if (EMAIL_PATTERN.test(part)) {
+      const href = emailContext
+        ? buildGmailComposeUrl(part, emailContext.role, emailContext.company)
+        : `mailto:${part}`;
+      return (
+        <a
+          key={i}
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={e => e.stopPropagation()}
+          title="Abrir Gmail para responder a este contacto"
+          className="text-indigo-600 dark:text-indigo-400 hover:underline break-all"
+        >
+          {part}
+        </a>
+      );
+    }
+    return part;
+  });
+}
+
+// ── Already-applied matching ────────────────────────────────────────────────
+// Best-effort: same company + similar title, tolerant of different recruiters
+// posting the same vacancy and of messy/inconsistent data entry.
+const TITLE_STOPWORDS = new Set(["de", "la", "el", "en", "para", "con", "y", "a", "the", "for", "and", "of", "to", "los", "las", "un", "una"]);
+
+function normalizeText(s: string): string {
+  return s
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getPostCompany(post: LIPost): string {
+  if (post.author?.type === "company") return post.author?.name || "";
+  const info = post.author?.info || post.author?.headline || "";
+  const match = info.match(/\b(?:at|en|@|de)\s+([A-Za-zÀ-ÿ0-9&.,'\-][A-Za-zÀ-ÿ0-9&.,'\- ]{1,79})$/i);
+  return (match?.[1] || post.author?.name || "").trim();
+}
+
+function getPostTitle(post: LIPost): string {
+  return (post.content || post.text || "").split("\n")[0].slice(0, 80);
+}
+
+function getPostLink(post: LIPost): string {
+  return post.linkedinUrl
+    || (post.id ? `https://www.linkedin.com/feed/update/urn:li:activity:${post.id}` : "")
+    || post.url || post.postUrl || "";
+}
+
+function titleSimilarity(a: string, b: string): number {
+  const words = (s: string) => new Set(
+    normalizeText(s).split(" ").filter(w => w.length > 2 && !TITLE_STOPWORDS.has(w))
+  );
+  const wa = words(a);
+  const wb = words(b);
+  if (wa.size === 0 || wb.size === 0) return 0;
+  let intersection = 0;
+  wa.forEach(w => { if (wb.has(w)) intersection++; });
+  const union = new Set([...wa, ...wb]).size;
+  return union === 0 ? 0 : intersection / union;
+}
+
+function findMatchingApplication(post: LIPost, applications: StoredApplication[]): StoredApplication | null {
+  const postCompany = normalizeText(getPostCompany(post));
+  if (!postCompany) return null;
+  const postTitle = getPostTitle(post);
+
+  for (const app of applications) {
+    const appCompany = normalizeText(app.company);
+    if (!appCompany) continue;
+    const companyMatches = postCompany === appCompany || postCompany.includes(appCompany) || appCompany.includes(postCompany);
+    if (!companyMatches) continue;
+    if (titleSimilarity(postTitle, app.title) >= 0.3) return app;
+  }
+  return null;
 }
 
 function sortLIPosts(posts: LIPost[], order: "newest" | "oldest"): LIPost[] {
@@ -174,6 +286,7 @@ export default function BuscarEmpleoPage() {
   const [config, setConfig] = useState<LIUserConfig | null>(null);
   const [ignored, setIgnored] = useState<Set<string>>(new Set());
   const [ignoredCount, setIgnoredCount] = useState(0);
+  const [applications, setApplications] = useState<StoredApplication[]>([]);
 
   const pollRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -192,8 +305,18 @@ export default function BuscarEmpleoPage() {
         }
       } catch (e) { console.error("[config load] catch:", e); }
 
-      // Restore ignore list
-      const ign = loadIgnored();
+      try {
+        setApplications(await getApplications());
+      } catch (e) { console.error("[applications load] catch:", e); }
+
+      // Restore ignore list (local cache first for instant filtering, then reconcile with Supabase)
+      const localIgn = loadIgnored();
+      let ign = localIgn;
+      try {
+        const remoteIgn = await getIgnoredPostKeys();
+        ign = new Set([...localIgn, ...remoteIgn]);
+        saveIgnored(ign);
+      } catch (e) { console.error("[ignored posts load] catch:", e); }
       setIgnored(ign);
 
       // Restore cache (filtering out any previously ignored posts)
@@ -381,6 +504,7 @@ export default function BuscarEmpleoPage() {
     next.add(key);
     setIgnored(next);
     saveIgnored(next);
+    ignorePostRemote(key).catch(e => console.error("[ignore post] remote sync catch:", e));
     // Also remove from current results
     const remove = (arr: LIPost[]) => arr.filter((p) => postKey(p) !== key);
     setResults((prev) => { const n = remove(prev); const cache = loadCache(); if (cache) saveCache({ ...cache, results: n }); return n; });
@@ -390,11 +514,44 @@ export default function BuscarEmpleoPage() {
     });
   };
 
+  const markAsApplied = async (post: LIPost) => {
+    const saved = await saveApplication({
+      title: getPostTitle(post) || "Puesto sin especificar",
+      company: getPostCompany(post) || "Empresa sin especificar",
+      applyUrl: getPostLink(post),
+      appliedAt: new Date().toISOString(),
+      status: "applied",
+      currency: "USD",
+      contactType: "recruiter_initiated",
+    });
+    if (!saved) throw new Error("No se pudo guardar la postulación.");
+    setApplications(prev => [saved, ...prev]);
+    ignorePost(post);
+  };
+
+  // Equivalente a abrir /postulaciones/nueva y guardar sin tocar nada:
+  // mismos valores que precarga el flujo de "Postular", sin navegar.
+  const quickApply = async (post: LIPost) => {
+    const saved = await saveApplication({
+      title: getPostTitle(post) || "Puesto sin especificar",
+      company: post.author?.name || "Empresa sin especificar",
+      applyUrl: getPostLink(post),
+      appliedAt: new Date().toISOString(),
+      status: "applied",
+      currency: "USD",
+      contactType: "self_initiated",
+    });
+    if (!saved) throw new Error("No se pudo guardar la postulación.");
+    setApplications(prev => [saved, ...prev]);
+    ignorePost(post);
+  };
+
   const clearIgnored = () => {
     const empty = new Set<string>();
     setIgnored(empty);
     saveIgnored(empty);
     setIgnoredCount(0);
+    clearIgnoredPostsRemote().catch(e => console.error("[clear ignored] remote sync catch:", e));
   };
 
   const deletePost = (post: LIPost) => {
@@ -432,7 +589,7 @@ export default function BuscarEmpleoPage() {
       <div className="max-w-7xl mx-auto px-4 py-5 lg:py-8">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Buscar Empleo</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Buscar Posts</h1>
           <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Buscá posts de LinkedIn con Apify y filtralos con tu lista negra</p>
         </div>
 
@@ -650,23 +807,23 @@ export default function BuscarEmpleoPage() {
                   key={post.id ?? idx}
                   post={post}
                   config={config}
+                  applications={applications}
                   score={(!hasBlacklist || activeTab === "relevant") && post.id ? scores[post.id] : undefined}
                   dimmed={activeTab === "discarded"}
                   selected={selectedIds.has(post.id ?? String(idx))}
                   onToggleSelect={() => toggleSelect(post.id ?? String(idx))}
                   onIgnore={() => ignorePost(post)}
                   onDelete={() => deletePost(post)}
+                  onMarkApplied={() => markAsApplied(post)}
                   onApply={() => {
                     ignorePost(post); // never show this post again in searches
-                    const postLink = post.linkedinUrl
-                      || (post.id ? `https://www.linkedin.com/feed/update/urn:li:activity:${post.id}` : "")
-                      || post.url || post.postUrl || "";
                     const params = new URLSearchParams();
                     params.set("company", post.author?.name || "");
-                    params.set("url", postLink);
-                    params.set("title", (post.content || post.text || "").split("\n")[0].slice(0, 80));
+                    params.set("url", getPostLink(post));
+                    params.set("title", getPostTitle(post));
                     router.push(`/postulaciones/nueva?${params.toString()}`);
                   }}
+                  onQuickApply={() => quickApply(post)}
                 />
               ))}
             </div>
@@ -697,21 +854,57 @@ function PostModal({
   post,
   score: initialScore,
   config,
+  matchedApplication,
   onClose,
   onIgnore,
   onDelete,
+  onMarkApplied,
   onApply,
+  onQuickApply,
 }: {
   post: LIPost;
   score?: { score: number; reason: string };
   config: LIUserConfig | null;
+  matchedApplication?: StoredApplication | null;
   onClose: () => void;
   onIgnore: () => void;
   onDelete: () => void;
+  onMarkApplied: () => Promise<void>;
   onApply: () => void;
+  onQuickApply: () => Promise<void>;
 }) {
   const [aiScore, setAiScore] = useState<{ score: number; reason: string } | null>(initialScore ?? null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [marking, setMarking] = useState(false);
+  const [markError, setMarkError] = useState<string | null>(null);
+  const [quickApplying, setQuickApplying] = useState(false);
+  const [quickApplyError, setQuickApplyError] = useState<string | null>(null);
+
+  async function handleQuickApply() {
+    setQuickApplying(true);
+    setQuickApplyError(null);
+    try {
+      await onQuickApply();
+      onClose();
+    } catch (e: any) {
+      setQuickApplyError(e?.message || "No se pudo guardar la postulación.");
+    } finally {
+      setQuickApplying(false);
+    }
+  }
+
+  async function handleMarkApplied() {
+    setMarking(true);
+    setMarkError(null);
+    try {
+      await onMarkApplied();
+      onClose();
+    } catch (e: any) {
+      setMarkError(e?.message || "No se pudo guardar la postulación.");
+    } finally {
+      setMarking(false);
+    }
+  }
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const [contactOpen, setContactOpen] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
@@ -742,11 +935,7 @@ function PostModal({
     if (!contactEmail.trim()) return;
     const role = config?.title || "desarrollador Frontend";
     const company = authorName;
-    const subject = encodeURIComponent(`Postulación — ${role}`);
-    const body = encodeURIComponent(
-      `Hola ${company},\n\nVi tu publicación en LinkedIn y me gustaría postularme para el rol de ${role}.\n\nQuedo a disposición para compartir mi CV y coordinar una llamada.\n\nSaludos,`
-    );
-    window.open(`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(contactEmail)}&su=${subject}&body=${body}`, "_blank", "noopener,noreferrer");
+    window.open(buildGmailComposeUrl(contactEmail, role, company), "_blank", "noopener,noreferrer");
   }
 
   const scoreValue = aiScore?.score ?? 0;
@@ -872,8 +1061,18 @@ function PostModal({
 
         {/* Content — scrollable */}
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          {matchedApplication && (
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 rounded-full px-2.5 py-1">
+              <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              Ya postulaste en {matchedApplication.company}
+            </span>
+          )}
           <p className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed whitespace-pre-wrap break-words">
-            {postText || <span className="text-gray-400 italic">Sin contenido</span>}
+            {postText
+              ? linkifyText(postText, { role: config?.title || "desarrollador Frontend", company: authorName })
+              : <span className="text-gray-400 italic">Sin contenido</span>}
           </p>
 
           {/* Contact section */}
@@ -1044,11 +1243,32 @@ function PostModal({
             </button>
             <button
               onClick={() => { onApply(); onClose(); }}
-              className="flex-1 text-sm font-bold py-2.5 rounded-xl bg-gray-900 dark:bg-gray-700 text-white hover:bg-indigo-600 transition-all active:scale-95 whitespace-nowrap"
+              className={`flex-1 text-sm font-bold py-2.5 rounded-xl transition-all active:scale-95 whitespace-nowrap ${matchedApplication ? "bg-white dark:bg-gray-800 border border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950" : "bg-gray-900 dark:bg-gray-700 text-white hover:bg-indigo-600"}`}
             >
-              Postular →
+              {matchedApplication ? "Postular igual →" : "Postular →"}
+            </button>
+            <button
+              onClick={handleQuickApply}
+              disabled={quickApplying}
+              title="Guarda la postulación con los datos del post, sin abrir el formulario, y sigue buscando"
+              className="shrink-0 flex items-center justify-center gap-1.5 px-4 text-sm font-bold py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-60 transition-all active:scale-95 whitespace-nowrap"
+            >
+              {quickApplying ? (
+                <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                </svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/>
+                </svg>
+              )}
+              Rápida
             </button>
           </div>
+          {quickApplyError && (
+            <p className="text-xs text-red-500 dark:text-red-400 text-center">{quickApplyError}</p>
+          )}
 
           {/* Secondary actions row */}
           <div className="flex gap-2">
@@ -1060,6 +1280,21 @@ function PostModal({
               </svg>
               LinkedIn
             </a>
+            <button onClick={handleMarkApplied} disabled={marking}
+              className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950 disabled:opacity-60 transition-all text-xs font-medium"
+              title="Marcar como ya postulado (postulaste por otro post o recruiter)">
+              {marking ? (
+                <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                </svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+              )}
+              Ya postulé
+            </button>
             <button onClick={() => { onIgnore(); onClose(); }}
               className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all text-xs font-medium"
               title="Ignorar para siempre">
@@ -1090,25 +1325,46 @@ function PostCard({
   post,
   score,
   config,
+  applications,
   dimmed = false,
   selected = false,
   onToggleSelect,
   onIgnore,
   onDelete,
+  onMarkApplied,
   onApply,
+  onQuickApply,
 }: {
   post: LIPost;
   score?: { score: number; reason: string };
   config: LIUserConfig | null;
+  applications: StoredApplication[];
   dimmed?: boolean;
   selected?: boolean;
   onToggleSelect?: () => void;
   onIgnore: () => void;
   onDelete: () => void;
+  onMarkApplied: () => Promise<void>;
   onApply: () => void;
+  onQuickApply: () => Promise<void>;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [quickApplying, setQuickApplying] = useState(false);
+  const [quickApplyError, setQuickApplyError] = useState<string | null>(null);
+
+  async function handleQuickApply() {
+    setQuickApplying(true);
+    setQuickApplyError(null);
+    try {
+      await onQuickApply();
+    } catch (e: any) {
+      setQuickApplyError(e?.message || "No se pudo guardar la postulación.");
+    } finally {
+      setQuickApplying(false);
+    }
+  }
   const [modalOpen, setModalOpen] = useState(false);
+  const matchedApplication = useMemo(() => findMatchingApplication(post, applications), [post, applications]);
 
   const authorName = post.author?.name || "Usuario de LinkedIn";
   const authorImg = post.author?.avatar?.url || post.author?.profileImage;
@@ -1148,15 +1404,18 @@ function PostCard({
         post={post}
         score={score}
         config={config}
+        matchedApplication={matchedApplication}
         onClose={() => setModalOpen(false)}
         onIgnore={onIgnore}
         onDelete={onDelete}
+        onMarkApplied={onMarkApplied}
         onApply={onApply}
+        onQuickApply={onQuickApply}
       />
     )}
     <div
       onClick={() => setModalOpen(true)}
-      className={`relative bg-white dark:bg-gray-900 border rounded-2xl flex flex-col transition-all hover:shadow-md overflow-hidden cursor-pointer ${selected ? "border-indigo-400 ring-2 ring-indigo-100 dark:ring-indigo-900 shadow-sm" : dimmed ? "opacity-40 border-gray-200 dark:border-gray-800" : "border-gray-200 dark:border-gray-800 hover:border-indigo-200 dark:hover:border-indigo-700"}`}>
+      className={`relative bg-white dark:bg-gray-900 border rounded-2xl flex flex-col transition-all hover:shadow-md overflow-hidden cursor-pointer ${selected ? "border-indigo-400 ring-2 ring-indigo-100 dark:ring-indigo-900 shadow-sm" : dimmed ? "opacity-40 border-gray-200 dark:border-gray-800" : matchedApplication ? "border-emerald-300 dark:border-emerald-700 hover:border-emerald-400" : "border-gray-200 dark:border-gray-800 hover:border-indigo-200 dark:hover:border-indigo-700"}`}>
 
       <div className="p-5 flex flex-col gap-3 flex-1">
         {/* Checkbox (top-left) */}
@@ -1195,6 +1454,18 @@ function PostCard({
             </svg>
           </button>
         </div>
+
+        {/* Already applied badge */}
+        {matchedApplication && (
+          <div className="pl-6 pr-8 -mb-1">
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 rounded-full px-2.5 py-1">
+              <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              Ya postulaste en {matchedApplication.company}
+            </span>
+          </div>
+        )}
 
         {/* Author */}
         <div className="flex items-center gap-3 pr-8 pl-6">
@@ -1240,7 +1511,7 @@ function PostCard({
 
         {/* Post text */}
         <div className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap break-words flex-1">
-          {displayText}
+          {linkifyText(displayText, { role: config?.title || "desarrollador Frontend", company: authorName })}
           {isLong && (
             <button
               onClick={() => setExpanded(!expanded)}
@@ -1316,11 +1587,31 @@ function PostCard({
             </a>
             <button
               onClick={e => { e.stopPropagation(); onApply(); }}
-              className="flex-1 text-[11px] font-bold py-2.5 rounded-xl bg-gray-900 dark:bg-gray-700 text-white hover:bg-indigo-600 dark:hover:bg-indigo-600 transition-all shadow-sm active:scale-95"
+              className={`flex-1 text-[11px] font-bold py-2.5 rounded-xl transition-all shadow-sm active:scale-95 ${matchedApplication ? "bg-white dark:bg-gray-800 border border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950" : "bg-gray-900 dark:bg-gray-700 text-white hover:bg-indigo-600 dark:hover:bg-indigo-600"}`}
             >
-              Postular →
+              {matchedApplication ? "Postular igual →" : "Postular →"}
+            </button>
+            <button
+              onClick={e => { e.stopPropagation(); handleQuickApply(); }}
+              disabled={quickApplying}
+              title="Postulación rápida: guarda y sigue buscando, sin abrir el formulario"
+              className="shrink-0 flex items-center justify-center w-9 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-60 transition-all shadow-sm active:scale-95"
+            >
+              {quickApplying ? (
+                <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                </svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/>
+                </svg>
+              )}
             </button>
           </div>
+          {quickApplyError && (
+            <p className="text-[10px] text-red-500 dark:text-red-400 text-center">{quickApplyError}</p>
+          )}
         </div>
       </div>
     </div>

@@ -77,6 +77,7 @@ export interface JobSource {
 export interface JobPost {
   id: string
   sourceId: string
+  source?: string
   externalId: string
   title: string
   company: string

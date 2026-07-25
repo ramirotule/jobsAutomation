@@ -21,6 +21,7 @@ function mapJobPost(row: any): JobPost {
   return {
     id:               row.id,
     sourceId:         row.source_id ?? '',
+    source:           row.source ?? undefined,
     externalId:       row.external_id ?? '',
     title:            row.title ?? '',
     company:          row.company ?? '',
