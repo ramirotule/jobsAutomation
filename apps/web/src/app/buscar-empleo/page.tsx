@@ -90,10 +90,16 @@ function formatARDate(d: Date): string {
 
 const PORTFOLIO_URL = "www.ramirotoulemonde.com.ar";
 
-function buildGmailComposeUrl(email: string, role: string, company: string): string {
-  const subject = encodeURIComponent(`Postulación — ${role}`);
+type EmailLang = "es" | "en";
+
+function buildGmailComposeUrl(email: string, role: string, company: string, lang: EmailLang = "es"): string {
+  const subject = encodeURIComponent(
+    lang === "en" ? `Application — ${role}` : `Postulación — ${role}`
+  );
   const body = encodeURIComponent(
-    `Hola ${company},\n\nVi tu publicación en LinkedIn y me gustaría postularme para el rol de ${role}.\n\nTe paso mi portfolio ${PORTFOLIO_URL} en donde podrás descargar mi CV actualizado y conocer mi experiencia laboral.\n\nSaludos y gracias por el tiempo.\n\nRamiro Santiago Toulemonde`
+    lang === "en"
+      ? `Hi ${company},\n\nI saw your post on LinkedIn and I'd like to apply for the ${role} position.\n\nHere's my portfolio ${PORTFOLIO_URL}, where you can download my updated resume and learn more about my experience.\n\nThanks for your time.\n\nRamiro Santiago Toulemonde`
+      : `Hola ${company},\n\nVi tu publicación en LinkedIn y me gustaría postularme para el rol de ${role}.\n\nTe paso mi portfolio ${PORTFOLIO_URL} en donde podrás descargar mi CV actualizado y conocer mi experiencia laboral.\n\nSaludos y gracias por el tiempo.\n\nRamiro Santiago Toulemonde`
   );
   return `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(email)}&su=${subject}&body=${body}`;
 }
@@ -118,21 +124,41 @@ function linkifyText(text: string, emailContext?: { role: string; company: strin
       );
     }
     if (EMAIL_PATTERN.test(part)) {
-      const href = emailContext
-        ? buildGmailComposeUrl(part, emailContext.role, emailContext.company)
-        : `mailto:${part}`;
       return (
-        <a
-          key={i}
-          href={href}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={e => e.stopPropagation()}
-          title="Abrir Gmail para responder a este contacto"
-          className="text-indigo-600 dark:text-indigo-400 hover:underline break-all"
-        >
-          {part}
-        </a>
+        <span key={i} className="inline-flex items-center gap-1 flex-wrap">
+          <a
+            href={`mailto:${part}`}
+            onClick={e => e.stopPropagation()}
+            title="Abrir cliente de mail"
+            className="text-indigo-600 dark:text-indigo-400 hover:underline break-all"
+          >
+            {part}
+          </a>
+          {emailContext && (
+            <>
+              <a
+                href={buildGmailComposeUrl(part, emailContext.role, emailContext.company, "es")}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                title="Enviar mail en español"
+                className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900 transition-colors"
+              >
+                ES
+              </a>
+              <a
+                href={buildGmailComposeUrl(part, emailContext.role, emailContext.company, "en")}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                title="Send email in English"
+                className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900 transition-colors"
+              >
+                EN
+              </a>
+            </>
+          )}
+        </span>
       );
     }
     return part;
@@ -170,6 +196,12 @@ function getPostLink(post: LIPost): string {
     || post.url || post.postUrl || "";
 }
 
+function getPostEmails(post: LIPost): string[] {
+  const text = post.content || post.text || "";
+  const matches = text.match(LINK_OR_EMAIL_PATTERN) || [];
+  return matches.filter(m => EMAIL_PATTERN.test(m)).map(m => m.toLowerCase());
+}
+
 function titleSimilarity(a: string, b: string): number {
   const words = (s: string) => new Set(
     normalizeText(s).split(" ").filter(w => w.length > 2 && !TITLE_STOPWORDS.has(w))
@@ -183,19 +215,46 @@ function titleSimilarity(a: string, b: string): number {
   return union === 0 ? 0 : intersection / union;
 }
 
-function findMatchingApplication(post: LIPost, applications: StoredApplication[]): StoredApplication | null {
+function textMatches(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  return a === b || a.includes(b) || b.includes(a);
+}
+
+export type ApplicationMatch = {
+  app: StoredApplication;
+  // "confirmed": company or recruiter name matches + similar title.
+  // "possible": the recruiter's email in the post matches an application's email,
+  // but company/title alone weren't enough to be sure it's the same posting.
+  confidence: "confirmed" | "possible";
+};
+
+// Matches by company OR recruiter name (a recruiter's own name is often the only
+// reliable identifier when the post doesn't state a company), plus title similarity.
+// Falls back to a lower-confidence match by recruiter email when that's the only signal.
+function findMatchingApplication(post: LIPost, applications: StoredApplication[]): ApplicationMatch | null {
   const postCompany = normalizeText(getPostCompany(post));
-  if (!postCompany) return null;
+  const postRecruiter = normalizeText(post.author?.name || "");
+  const postEmails = getPostEmails(post);
   const postTitle = getPostTitle(post);
+
+  let possible: ApplicationMatch | null = null;
 
   for (const app of applications) {
     const appCompany = normalizeText(app.company);
-    if (!appCompany) continue;
-    const companyMatches = postCompany === appCompany || postCompany.includes(appCompany) || appCompany.includes(postCompany);
-    if (!companyMatches) continue;
-    if (titleSimilarity(postTitle, app.title) >= 0.3) return app;
+    const appRecruiter = normalizeText(app.recruiterName || "");
+    const appEmail = (app.recruiterEmail || "").toLowerCase().trim();
+
+    const companyMatches = textMatches(postCompany, appCompany);
+    const recruiterMatches = textMatches(postRecruiter, appRecruiter);
+    if ((companyMatches || recruiterMatches) && titleSimilarity(postTitle, app.title) >= 0.3) {
+      return { app, confidence: "confirmed" };
+    }
+
+    if (!possible && appEmail && postEmails.includes(appEmail)) {
+      possible = { app, confidence: "possible" };
+    }
   }
-  return null;
+  return possible;
 }
 
 function sortLIPosts(posts: LIPost[], order: "newest" | "oldest"): LIPost[] {
@@ -523,6 +582,7 @@ export default function BuscarEmpleoPage() {
       status: "applied",
       currency: "USD",
       contactType: "recruiter_initiated",
+      recruiterEmail: getPostEmails(post)[0],
     });
     if (!saved) throw new Error("No se pudo guardar la postulación.");
     setApplications(prev => [saved, ...prev]);
@@ -540,6 +600,7 @@ export default function BuscarEmpleoPage() {
       status: "applied",
       currency: "USD",
       contactType: "self_initiated",
+      recruiterEmail: getPostEmails(post)[0],
     });
     if (!saved) throw new Error("No se pudo guardar la postulación.");
     setApplications(prev => [saved, ...prev]);
@@ -821,6 +882,8 @@ export default function BuscarEmpleoPage() {
                     params.set("company", post.author?.name || "");
                     params.set("url", getPostLink(post));
                     params.set("title", getPostTitle(post));
+                    const recruiterEmail = getPostEmails(post)[0];
+                    if (recruiterEmail) params.set("recruiterEmail", recruiterEmail);
                     router.push(`/postulaciones/nueva?${params.toString()}`);
                   }}
                   onQuickApply={() => quickApply(post)}
@@ -865,7 +928,7 @@ function PostModal({
   post: LIPost;
   score?: { score: number; reason: string };
   config: LIUserConfig | null;
-  matchedApplication?: StoredApplication | null;
+  matchedApplication?: ApplicationMatch | null;
   onClose: () => void;
   onIgnore: () => void;
   onDelete: () => void;
@@ -931,11 +994,11 @@ function PostModal({
   const liVanity = authorUrl?.match(/linkedin\.com\/in\/([^/?#]+)/)?.[1] ?? null;
   const liDmUrl = liVanity ? `https://www.linkedin.com/messaging/compose/?recipient=${liVanity}` : authorUrl ?? null;
 
-  function openGmail() {
+  function openGmail(lang: EmailLang) {
     if (!contactEmail.trim()) return;
     const role = config?.title || "desarrollador Frontend";
     const company = authorName;
-    window.open(buildGmailComposeUrl(contactEmail, role, company), "_blank", "noopener,noreferrer");
+    window.open(buildGmailComposeUrl(contactEmail, role, company, lang), "_blank", "noopener,noreferrer");
   }
 
   const scoreValue = aiScore?.score ?? 0;
@@ -1061,12 +1124,27 @@ function PostModal({
 
         {/* Content — scrollable */}
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-          {matchedApplication && (
+          {matchedApplication?.confidence === "confirmed" ? (
             <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 rounded-full px-2.5 py-1">
               <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
-              Ya postulaste en {matchedApplication.company}
+              Ya postulaste en {matchedApplication.app.company}
+              {matchedApplication.app.recruiterName && ` · recruiter ${matchedApplication.app.recruiterName}`}
+            </span>
+          ) : matchedApplication?.confidence === "possible" ? (
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-full px-2.5 py-1">
+              <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/>
+              </svg>
+              Posible postulación previa — mismo email de recruiter en {matchedApplication.app.company}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full px-2.5 py-1">
+              <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              Sin registro de postulación (por empresa/recruiter/email)
             </span>
           )}
           <p className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed whitespace-pre-wrap break-words">
@@ -1118,23 +1196,35 @@ function PostModal({
                       type="email"
                       value={contactEmail}
                       onChange={e => setContactEmail(e.target.value)}
-                      onKeyDown={e => { if (e.key === "Enter") openGmail(); }}
+                      onKeyDown={e => { if (e.key === "Enter") openGmail("es"); }}
                       placeholder="Email del recruiter"
                       className="flex-1 text-sm px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:border-red-400 focus:ring-1 focus:ring-red-100 outline-none transition-all"
                     />
                     <button
-                      onClick={openGmail}
+                      onClick={() => openGmail("es")}
                       disabled={!contactEmail.trim()}
-                      className="shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-xl bg-red-500 hover:bg-red-600 disabled:opacity-40 text-white text-sm font-bold transition-colors active:scale-95"
+                      title="Enviar en español"
+                      className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-500 hover:bg-red-600 disabled:opacity-40 text-white text-sm font-bold transition-colors active:scale-95"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z"/>
                       </svg>
-                      Gmail
+                      ES
+                    </button>
+                    <button
+                      onClick={() => openGmail("en")}
+                      disabled={!contactEmail.trim()}
+                      title="Send in English"
+                      className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-500 hover:bg-red-600 disabled:opacity-40 text-white text-sm font-bold transition-colors active:scale-95"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z"/>
+                      </svg>
+                      EN
                     </button>
                   </div>
                   <p className="text-[11px] text-gray-400 dark:text-gray-500">
-                    Abre Gmail con asunto y cuerpo prellenados. Solo tocás Enviar.
+                    Abre Gmail con asunto y cuerpo prellenados en el idioma elegido. Solo tocás Enviar.
                   </p>
                 </div>
               </div>
@@ -1243,9 +1333,9 @@ function PostModal({
             </button>
             <button
               onClick={() => { onApply(); onClose(); }}
-              className={`flex-1 text-sm font-bold py-2.5 rounded-xl transition-all active:scale-95 whitespace-nowrap ${matchedApplication ? "bg-white dark:bg-gray-800 border border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950" : "bg-gray-900 dark:bg-gray-700 text-white hover:bg-indigo-600"}`}
+              className={`flex-1 text-sm font-bold py-2.5 rounded-xl transition-all active:scale-95 whitespace-nowrap ${matchedApplication?.confidence === "confirmed" ? "bg-white dark:bg-gray-800 border border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950" : matchedApplication?.confidence === "possible" ? "bg-white dark:bg-gray-800 border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950" : "bg-gray-900 dark:bg-gray-700 text-white hover:bg-indigo-600"}`}
             >
-              {matchedApplication ? "Postular igual →" : "Postular →"}
+              {matchedApplication?.confidence === "confirmed" ? "Postular igual →" : matchedApplication?.confidence === "possible" ? "¿Postular de nuevo? →" : "Postular →"}
             </button>
             <button
               onClick={handleQuickApply}
@@ -1351,6 +1441,7 @@ function PostCard({
   const [expanded, setExpanded] = useState(false);
   const [quickApplying, setQuickApplying] = useState(false);
   const [quickApplyError, setQuickApplyError] = useState<string | null>(null);
+  const [showCheck, setShowCheck] = useState(false);
 
   async function handleQuickApply() {
     setQuickApplying(true);
@@ -1415,7 +1506,7 @@ function PostCard({
     )}
     <div
       onClick={() => setModalOpen(true)}
-      className={`relative bg-white dark:bg-gray-900 border rounded-2xl flex flex-col transition-all hover:shadow-md overflow-hidden cursor-pointer ${selected ? "border-indigo-400 ring-2 ring-indigo-100 dark:ring-indigo-900 shadow-sm" : dimmed ? "opacity-40 border-gray-200 dark:border-gray-800" : matchedApplication ? "border-emerald-300 dark:border-emerald-700 hover:border-emerald-400" : "border-gray-200 dark:border-gray-800 hover:border-indigo-200 dark:hover:border-indigo-700"}`}>
+      className={`relative bg-white dark:bg-gray-900 border rounded-2xl flex flex-col transition-all hover:shadow-md overflow-hidden cursor-pointer ${selected ? "border-indigo-400 ring-2 ring-indigo-100 dark:ring-indigo-900 shadow-sm" : dimmed ? "opacity-40 border-gray-200 dark:border-gray-800" : matchedApplication?.confidence === "confirmed" ? "border-emerald-300 dark:border-emerald-700 hover:border-emerald-400" : matchedApplication?.confidence === "possible" ? "border-amber-300 dark:border-amber-700 hover:border-amber-400" : "border-gray-200 dark:border-gray-800 hover:border-indigo-200 dark:hover:border-indigo-700"}`}>
 
       <div className="p-5 flex flex-col gap-3 flex-1">
         {/* Checkbox (top-left) */}
@@ -1431,8 +1522,52 @@ function PostCard({
           )}
         </button>
 
-        {/* Ignore + Delete buttons stacked top-right */}
-        <div className="absolute top-2.5 right-2.5 flex flex-col gap-1.5 z-10">
+        {/* Check application status + Ignore + Delete buttons, row top-right */}
+        <div className="absolute top-2.5 right-2.5 flex flex-row gap-1.5 z-10">
+          <div className="relative">
+            <button
+              onClick={e => { e.stopPropagation(); setShowCheck(v => !v); }}
+              className={`w-9 h-9 flex items-center justify-center rounded-xl border shadow-sm transition-all active:scale-95 ${matchedApplication?.confidence === "confirmed" ? "bg-emerald-50 dark:bg-emerald-950 border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900" : matchedApplication?.confidence === "possible" ? "bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900" : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:border-indigo-300 dark:hover:border-indigo-600"}`}
+              title={matchedApplication?.confidence === "confirmed" ? `Ya postulaste en ${matchedApplication.app.company}` : matchedApplication?.confidence === "possible" ? `Posible postulación previa en ${matchedApplication.app.company}` : "¿Ya postulé? Verificar por recruiter/empresa/email"}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+            </button>
+            {showCheck && (
+              <div
+                onClick={e => e.stopPropagation()}
+                className="absolute right-0 top-11 z-20 w-56 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg p-3 text-xs"
+              >
+                {matchedApplication?.confidence === "confirmed" ? (
+                  <>
+                    <p className="font-bold text-emerald-700 dark:text-emerald-400 mb-1">Ya postulaste ✓</p>
+                    <p className="text-gray-600 dark:text-gray-300">
+                      {matchedApplication.app.company} · {new Date(matchedApplication.app.appliedAt).toLocaleDateString("es-AR")}
+                    </p>
+                    {matchedApplication.app.recruiterName && (
+                      <p className="text-gray-400 dark:text-gray-500 mt-1">Recruiter: {matchedApplication.app.recruiterName}</p>
+                    )}
+                  </>
+                ) : matchedApplication?.confidence === "possible" ? (
+                  <>
+                    <p className="font-bold text-amber-700 dark:text-amber-400 mb-1">Posible postulación previa ⚠</p>
+                    <p className="text-gray-600 dark:text-gray-300">
+                      Mismo email de recruiter que en tu postulación a {matchedApplication.app.company} ({new Date(matchedApplication.app.appliedAt).toLocaleDateString("es-AR")}), aunque el título/empresa no coinciden del todo.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-bold text-gray-700 dark:text-gray-300 mb-1">Sin registro de postulación</p>
+                    <p className="text-gray-400 dark:text-gray-500">
+                      No encontramos coincidencia por empresa, recruiter ({authorName}) ni email para este puesto.
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
           <button
             onClick={e => { e.stopPropagation(); onIgnore(); }}
             className="w-9 h-9 flex items-center justify-center rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:text-slate-700 dark:hover:text-slate-200 hover:border-slate-400 dark:hover:border-slate-500 shadow-sm transition-all active:scale-95"
@@ -1456,19 +1591,29 @@ function PostCard({
         </div>
 
         {/* Already applied badge */}
-        {matchedApplication && (
-          <div className="pl-6 pr-8 -mb-1">
+        {matchedApplication?.confidence === "confirmed" && (
+          <div className="pl-6 pr-32 -mb-1">
             <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 rounded-full px-2.5 py-1">
               <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
-              Ya postulaste en {matchedApplication.company}
+              Ya postulaste en {matchedApplication.app.company}
+            </span>
+          </div>
+        )}
+        {matchedApplication?.confidence === "possible" && (
+          <div className="pl-6 pr-32 -mb-1">
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-full px-2.5 py-1">
+              <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/>
+              </svg>
+              Posible postulación previa (mismo email)
             </span>
           </div>
         )}
 
         {/* Author */}
-        <div className="flex items-center gap-3 pr-8 pl-6">
+        <div className="flex items-center gap-3 pr-32 pl-6">
           {/* Avatar */}
           <div className="shrink-0 relative">
             {authorImg ? (
@@ -1587,9 +1732,9 @@ function PostCard({
             </a>
             <button
               onClick={e => { e.stopPropagation(); onApply(); }}
-              className={`flex-1 text-[11px] font-bold py-2.5 rounded-xl transition-all shadow-sm active:scale-95 ${matchedApplication ? "bg-white dark:bg-gray-800 border border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950" : "bg-gray-900 dark:bg-gray-700 text-white hover:bg-indigo-600 dark:hover:bg-indigo-600"}`}
+              className={`flex-1 text-[11px] font-bold py-2.5 rounded-xl transition-all shadow-sm active:scale-95 ${matchedApplication?.confidence === "confirmed" ? "bg-white dark:bg-gray-800 border border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950" : matchedApplication?.confidence === "possible" ? "bg-white dark:bg-gray-800 border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950" : "bg-gray-900 dark:bg-gray-700 text-white hover:bg-indigo-600 dark:hover:bg-indigo-600"}`}
             >
-              {matchedApplication ? "Postular igual →" : "Postular →"}
+              {matchedApplication?.confidence === "confirmed" ? "Postular igual →" : matchedApplication?.confidence === "possible" ? "¿Postular de nuevo? →" : "Postular →"}
             </button>
             <button
               onClick={e => { e.stopPropagation(); handleQuickApply(); }}

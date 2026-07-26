@@ -28,6 +28,7 @@ export interface StoredApplication {
   benefits?: string
   notes?: string
   recruiterName?: string
+  recruiterEmail?: string
   recruiterLinkedin?: string
   contactType?: 'self_initiated' | 'recruiter_initiated'
   interviewAt?: string // ISO timestamp
@@ -70,6 +71,7 @@ function mapRow(row: Record<string, unknown>): StoredApplication {
     benefits:          row.benefits as string | undefined,
     notes:             row.notes as string | undefined,
     recruiterName:     row.recruiter_name as string | undefined,
+    recruiterEmail:    row.contact_email as string | undefined,
     recruiterLinkedin:     row.recruiter_linkedin as string | undefined,
     contactType:       (row.contact_type as 'self_initiated' | 'recruiter_initiated') || undefined,
     interviewAt:       (row.interview_at as string) || undefined,
@@ -119,6 +121,7 @@ export async function saveApplication(app: Omit<StoredApplication, 'id' | 'updat
       benefits:           app.benefits,
       notes:              app.notes,
       recruiter_name:     app.recruiterName,
+      contact_email:      app.recruiterEmail,
       recruiter_linkedin: app.recruiterLinkedin,
       contact_type:       app.contactType,
       interview_at:       app.interviewAt,
@@ -139,6 +142,7 @@ export async function updateApplication(id: string, updates: Partial<StoredAppli
       ...(updates.benefits          !== undefined && { benefits:           updates.benefits }),
       ...(updates.notes             !== undefined && { notes:              updates.notes }),
       ...(updates.recruiterName     !== undefined && { recruiter_name:     updates.recruiterName }),
+      ...(updates.recruiterEmail    !== undefined && { contact_email:      updates.recruiterEmail }),
       ...(updates.contactType       !== undefined && { contact_type:       updates.contactType }),
       ...(updates.title             !== undefined && { title:              updates.title }),
       ...(updates.company           !== undefined && { company:           updates.company }),

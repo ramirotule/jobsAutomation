@@ -54,6 +54,7 @@ function NuevaPostulacionContent() {
     salaryExpectation: "",
     currency: "USD",
     recruiterName: "",
+    recruiterEmail: "",
     recruiterLinkedin: "",
     contactType: "self_initiated" as "self_initiated" | "recruiter_initiated",
     notes: "",
@@ -66,8 +67,9 @@ function NuevaPostulacionContent() {
     const jobId = searchParams.get("job_id");
     const loc = searchParams.get("location");
     const url = searchParams.get("url");
+    const recruiterEmail = searchParams.get("recruiterEmail");
 
-    if (title || company || url || loc || jobId) {
+    if (title || company || url || loc || jobId || recruiterEmail) {
       setFormData(prev => ({
         ...prev,
         title: title || prev.title,
@@ -75,6 +77,7 @@ function NuevaPostulacionContent() {
         applyUrl: url || prev.applyUrl,
         location: loc || prev.location,
         jobId: jobId || prev.jobId,
+        recruiterEmail: recruiterEmail || prev.recruiterEmail,
       }));
     }
   }, [searchParams]);
@@ -179,6 +182,14 @@ function NuevaPostulacionContent() {
               <input type="text" id="recruiterName" name="recruiterName"
                 value={formData.recruiterName} onChange={handleChange}
                 placeholder="Nombre del contacto"
+                className={inputCls} />
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="recruiterEmail" className={labelCls}>Email del Recruiter</label>
+              <input type="email" id="recruiterEmail" name="recruiterEmail"
+                value={formData.recruiterEmail} onChange={handleChange}
+                placeholder="nombre@empresa.com"
                 className={inputCls} />
             </div>
 
