@@ -62,6 +62,7 @@ export default function PostulacionDetailPage() {
     benefits: "",
     notes: "",
     recruiterName: "",
+    recruiterEmail: "",
     recruiterLinkedin: "",
     contactType: "self_initiated" as "self_initiated" | "recruiter_initiated",
     interviewAt: "",
@@ -89,6 +90,7 @@ export default function PostulacionDetailPage() {
         benefits: data.benefits ?? "",
         notes: data.notes ?? "",
         recruiterName: data.recruiterName ?? "",
+        recruiterEmail: data.recruiterEmail ?? "",
         recruiterLinkedin: data.recruiterLinkedin ?? "",
         contactType: data.contactType ?? "self_initiated",
         interviewAt: data.interviewAt
@@ -119,6 +121,7 @@ export default function PostulacionDetailPage() {
       benefits: finalForm.benefits || undefined,
       notes: finalForm.notes || undefined,
       recruiterName: finalForm.recruiterName || undefined,
+      recruiterEmail: finalForm.recruiterEmail || undefined,
       recruiterLinkedin: finalForm.recruiterLinkedin || undefined,
       contactType: finalForm.contactType,
       interviewAt: finalForm.interviewAt
@@ -349,6 +352,18 @@ export default function PostulacionDetailPage() {
                 value={form.recruiterName}
                 onChange={(e) => set("recruiterName", e.target.value)}
                 placeholder="Nombre del contacto"
+                className="w-full text-sm border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 rounded-lg px-3 py-2"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-gray-500">
+                Email del Recruiter
+              </label>
+              <input
+                type="email"
+                value={form.recruiterEmail}
+                onChange={(e) => set("recruiterEmail", e.target.value)}
+                placeholder="nombre@empresa.com"
                 className="w-full text-sm border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 rounded-lg px-3 py-2"
               />
             </div>
