@@ -37,6 +37,10 @@ function PerfilPageContent() {
   const searchParams = useSearchParams();
   const [form, setForm] = useState<ProfileForm>(DEFAULT_FORM);
   const [cvText, setCvText] = useState("");
+  const [cvFile, setCvFile] = useState<File | null>(null);
+  const [cvFileUrl, setCvFileUrl] = useState<string | null>(null);
+  const [cvFileName, setCvFileName] = useState<string | null>(null);
+  const [downloadingCv, setDownloadingCv] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savingCv, setSavingCv] = useState(false);
   const [savingKit, setSavingKit] = useState(false);
@@ -85,6 +89,11 @@ function PerfilPageContent() {
   const [dmES, setDmES] = useState("");
   const [dmEN, setDmEN] = useState("");
 
+  const [dm2Lang, setDM2Lang] = useState<"es" | "en">("en");
+  const [dm2ES, setDm2ES] = useState("");
+  const [dm2EN, setDm2EN] = useState("");
+  const [attachCv, setAttachCv] = useState(false);
+
   const [copied, setCopied] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
@@ -110,6 +119,9 @@ function PerfilPageContent() {
       setCoverEN(profile.cover_letter_en ?? "");
       setDmES(profile.dm_es ?? "");
       setDmEN(profile.dm_en ?? "");
+      setDm2ES(profile.dm2_es ?? "");
+      setDm2EN(profile.dm2_en ?? "");
+      setAttachCv(profile.dm2_attach_cv ?? false);
     }
 
     // Load Search Profile
@@ -147,7 +159,7 @@ function PerfilPageContent() {
     // Load CV
     const { data: cv } = await supabase
       .from("resumes")
-      .select("raw_text")
+      .select("raw_text, file_url, file_name")
       .eq("user_id", user.id)
       .eq("is_active", true)
       .order("created_at", { ascending: false })
@@ -155,6 +167,8 @@ function PerfilPageContent() {
       .maybeSingle();
 
     if (cv?.raw_text) setCvText(cv.raw_text);
+    setCvFileUrl(cv?.file_url ?? null);
+    setCvFileName(cv?.file_name ?? null);
   }, [supabase]);
 
   useEffect(() => {
@@ -255,13 +269,51 @@ function PerfilPageContent() {
     if (!user) return;
 
     try {
+      let fileUrl = cvFileUrl;
+      let fileName = cvFileName;
+
+      if (cvFile) {
+        if (cvFile.type !== "application/pdf") {
+          throw new Error("El CV debe ser un archivo PDF");
+        }
+        const path = `${user.id}/${Date.now()}_${cvFile.name}`;
+        const { error: uploadError } = await supabase.storage.from("resumes").upload(path, cvFile, { upsert: true });
+        if (uploadError) throw uploadError;
+        fileUrl = path;
+        fileName = cvFile.name;
+      }
+
       await supabase.from("resumes").update({ is_active: false }).eq("user_id", user.id);
-      await supabase.from("resumes").insert({ user_id: user.id, raw_text: cvText, is_active: true });
+      await supabase.from("resumes").insert({
+        user_id: user.id,
+        raw_text: cvText,
+        file_url: fileUrl,
+        file_name: fileName,
+        is_active: true,
+      });
+
+      setCvFileUrl(fileUrl);
+      setCvFileName(fileName);
+      setCvFile(null);
       showToast("CV actualizado correctamente");
     } catch (e: any) {
       showToast(e.message, 'error');
     } finally {
       setSavingCv(false);
+    }
+  }
+
+  async function downloadCv() {
+    if (!cvFileUrl) return;
+    setDownloadingCv(true);
+    try {
+      const { data, error } = await supabase.storage.from("resumes").createSignedUrl(cvFileUrl, 60);
+      if (error) throw error;
+      if (data?.signedUrl) window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+    } catch (e: any) {
+      showToast(e.message, "error");
+    } finally {
+      setDownloadingCv(false);
     }
   }
 
@@ -281,6 +333,9 @@ function PerfilPageContent() {
         cover_letter_en: coverEN,
         dm_es: dmES,
         dm_en: dmEN,
+        dm2_es: dm2ES,
+        dm2_en: dm2EN,
+        dm2_attach_cv: attachCv,
       });
 
     if (error) {
@@ -330,6 +385,8 @@ function PerfilPageContent() {
   const setCoverLetter = (val: string) => coverLang === "es" ? setCoverES(val) : setCoverEN(val);
   const directMessage = dmLang === "es" ? dmES : dmEN;
   const setDirectMessage = (val: string) => dmLang === "es" ? setDmES(val) : setDmEN(val);
+  const directMail = dm2Lang === "es" ? dm2ES : dm2EN;
+  const setDirectMail = (val: string) => dm2Lang === "es" ? setDm2ES(val) : setDm2EN(val);
 
   function copyToClipboard(text: string, key: string) {
     if (!text) return;
@@ -604,7 +661,29 @@ function PerfilPageContent() {
               className={`${inputCls} font-mono text-xs`}
               placeholder="Pegá aquí el texto completo de tu CV..."
             />
-            <button onClick={saveCv} disabled={savingCv || !cvText.trim()} className="w-full sm:w-auto bg-indigo-600 text-white text-sm px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 transition-all">
+
+            <div className="border border-dashed border-gray-300 dark:border-gray-700 rounded-xl p-4 space-y-3">
+              <label className="text-xs font-bold uppercase text-slate-400">Archivo del CV (PDF)</label>
+              <input
+                type="file"
+                accept="application/pdf"
+                onChange={(e) => setCvFile(e.target.files?.[0] ?? null)}
+                className="block w-full text-sm text-gray-600 dark:text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-950 dark:file:text-indigo-300"
+              />
+              {cvFile && (
+                <p className="text-xs text-gray-500 dark:text-gray-400">Seleccionado: {cvFile.name} (se sube al guardar)</p>
+              )}
+              {!cvFile && cvFileName && (
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">Archivo actual: {cvFileName}</p>
+                  <button onClick={downloadCv} disabled={downloadingCv} className="text-xs border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 shrink-0">
+                    {downloadingCv ? "Abriendo..." : "Descargar CV"}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <button onClick={saveCv} disabled={savingCv || (!cvText.trim() && !cvFile)} className="w-full sm:w-auto bg-indigo-600 text-white text-sm px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 transition-all">
               {savingCv ? "Guardando..." : "Guardar CV"}
             </button>
           </div>
@@ -654,6 +733,48 @@ function PerfilPageContent() {
                 className={`${inputCls} font-mono`}
                 placeholder="Escribe tu mensaje directo..."
               />
+            </div>
+
+            <div className="bg-white border border-gray-200 rounded-xl p-6">
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-semibold text-gray-700">Direct Mail</h2>
+                  <LangToggle current={dm2Lang} onChange={setDM2Lang} />
+                </div>
+                <button onClick={() => copyToClipboard(directMail, "dm2")} className="text-xs border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-50">
+                  {copied === "dm2" ? "✓ Copiado" : "Copiar"}
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mb-2">
+                Usá <code className="bg-gray-100 px-1 rounded">{"{{nombre}}"}</code> para el nombre del destinatario y <code className="bg-gray-100 px-1 rounded">{"{{rol}}"}</code> para el puesto — se completan solos al enviar el mail desde una vacante.
+              </p>
+              <textarea
+                value={directMail}
+                onChange={(e) => setDirectMail(e.target.value)}
+                rows={6}
+                className={`${inputCls} font-mono`}
+                placeholder={"Hello {{nombre}},\n\nI saw your post on LinkedIn and would like to apply for the position of {{rol}}.\n\n..."}
+              />
+              <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
+                <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={attachCv}
+                    onChange={(e) => setAttachCv(e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  Adjuntar CV
+                </label>
+                {attachCv && (
+                  cvFileName ? (
+                    <button onClick={downloadCv} disabled={downloadingCv} className="text-xs border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-50 disabled:opacity-50">
+                      {downloadingCv ? "Abriendo..." : `Descargar CV (${cvFileName})`}
+                    </button>
+                  ) : (
+                    <span className="text-xs text-amber-600">Todavía no subiste un CV en la pestaña CV</span>
+                  )
+                )}
+              </div>
             </div>
 
             <div className="bg-white border border-gray-200 rounded-xl p-6">

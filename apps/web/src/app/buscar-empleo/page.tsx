@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { getApplications, saveApplication, type StoredApplication } from "@/lib/applications";
 import { getIgnoredPostKeys, ignorePostRemote, clearIgnoredPostsRemote } from "@/lib/ignoredPosts";
+import { ConfirmModal } from "@/components/Modal";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface LIPost {
@@ -92,14 +93,24 @@ const PORTFOLIO_URL = "www.ramirotoulemonde.com.ar";
 
 type EmailLang = "es" | "en";
 
-function buildGmailComposeUrl(email: string, role: string, company: string, lang: EmailLang = "es"): string {
+// Placeholders that a user's Direct Mail template (Perfil → Kit) can use:
+// {{nombre}} / {{name}} — recipient's name (recruiter or post author)
+// {{rol}} / {{role}} — role being applied to
+function fillDirectMailTemplate(template: string, recipientName: string, role: string): string {
+  return template
+    .replace(/\{\{\s*(nombre|name)\s*\}\}/gi, recipientName)
+    .replace(/\{\{\s*(rol|role)\s*\}\}/gi, role);
+}
+
+function buildGmailComposeUrl(email: string, role: string, recipientName: string, lang: EmailLang = "es", template?: string): string {
   const subject = encodeURIComponent(
     lang === "en" ? `Application — ${role}` : `Postulación — ${role}`
   );
+  const fallback = lang === "en"
+    ? `Hi ${recipientName},\n\nI saw your post on LinkedIn and I'd like to apply for the ${role} position.\n\nHere's my portfolio ${PORTFOLIO_URL}, where you can download my updated resume and learn more about my experience.\n\nThanks for your time.\n\nRamiro Santiago Toulemonde`
+    : `Hola ${recipientName},\n\nVi tu publicación en LinkedIn y me gustaría postularme para el rol de ${role}.\n\nTe paso mi portfolio ${PORTFOLIO_URL} en donde podrás descargar mi CV actualizado y conocer mi experiencia laboral.\n\nSaludos y gracias por el tiempo.\n\nRamiro Santiago Toulemonde`;
   const body = encodeURIComponent(
-    lang === "en"
-      ? `Hi ${company},\n\nI saw your post on LinkedIn and I'd like to apply for the ${role} position.\n\nHere's my portfolio ${PORTFOLIO_URL}, where you can download my updated resume and learn more about my experience.\n\nThanks for your time.\n\nRamiro Santiago Toulemonde`
-      : `Hola ${company},\n\nVi tu publicación en LinkedIn y me gustaría postularme para el rol de ${role}.\n\nTe paso mi portfolio ${PORTFOLIO_URL} en donde podrás descargar mi CV actualizado y conocer mi experiencia laboral.\n\nSaludos y gracias por el tiempo.\n\nRamiro Santiago Toulemonde`
+    template?.trim() ? fillDirectMailTemplate(template, recipientName, role) : fallback
   );
   return `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(email)}&su=${subject}&body=${body}`;
 }
@@ -107,7 +118,7 @@ function buildGmailComposeUrl(email: string, role: string, company: string, lang
 const LINK_OR_EMAIL_PATTERN = /(https?:\/\/[^\s<>"')\]]+|[\w.+-]+@[\w-]+\.[a-zA-Z.]{2,})/g;
 const EMAIL_PATTERN = /^[\w.+-]+@[\w-]+\.[a-zA-Z.]{2,}$/;
 
-function linkifyText(text: string, emailContext?: { role: string; company: string }) {
+function linkifyText(text: string, emailContext?: { role: string; company: string; templateEs?: string; templateEn?: string }) {
   return text.split(LINK_OR_EMAIL_PATTERN).map((part, i) => {
     if (/^https?:\/\//.test(part)) {
       return (
@@ -137,7 +148,7 @@ function linkifyText(text: string, emailContext?: { role: string; company: strin
           {emailContext && (
             <>
               <a
-                href={buildGmailComposeUrl(part, emailContext.role, emailContext.company, "es")}
+                href={buildGmailComposeUrl(part, emailContext.role, emailContext.company, "es", emailContext.templateEs)}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={e => e.stopPropagation()}
@@ -147,7 +158,7 @@ function linkifyText(text: string, emailContext?: { role: string; company: strin
                 ES
               </a>
               <a
-                href={buildGmailComposeUrl(part, emailContext.role, emailContext.company, "en")}
+                href={buildGmailComposeUrl(part, emailContext.role, emailContext.company, "en", emailContext.templateEn)}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={e => e.stopPropagation()}
@@ -343,6 +354,7 @@ export default function BuscarEmpleoPage() {
   const [scoring, setScoring] = useState(false);
   const [scores, setScores] = useState<Record<string, { score: number; reason: string }>>({});
   const [config, setConfig] = useState<LIUserConfig | null>(null);
+  const [dmTemplate, setDmTemplate] = useState<{ es: string; en: string } | null>(null);
   const [ignored, setIgnored] = useState<Set<string>>(new Set());
   const [ignoredCount, setIgnoredCount] = useState(0);
   const [applications, setApplications] = useState<StoredApplication[]>([]);
@@ -361,6 +373,13 @@ export default function BuscarEmpleoPage() {
             .eq("user_id", user.id)
             .maybeSingle();
           if (data) setConfig(data as LIUserConfig);
+
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("dm2_es, dm2_en")
+            .eq("id", user.id)
+            .maybeSingle();
+          if (profile) setDmTemplate({ es: profile.dm2_es ?? "", en: profile.dm2_en ?? "" });
         }
       } catch (e) { console.error("[config load] catch:", e); }
 
@@ -868,6 +887,7 @@ export default function BuscarEmpleoPage() {
                   key={post.id ?? idx}
                   post={post}
                   config={config}
+                  dmTemplate={dmTemplate}
                   applications={applications}
                   score={(!hasBlacklist || activeTab === "relevant") && post.id ? scores[post.id] : undefined}
                   dimmed={activeTab === "discarded"}
@@ -917,6 +937,7 @@ function PostModal({
   post,
   score: initialScore,
   config,
+  dmTemplate,
   matchedApplication,
   onClose,
   onIgnore,
@@ -928,6 +949,7 @@ function PostModal({
   post: LIPost;
   score?: { score: number; reason: string };
   config: LIUserConfig | null;
+  dmTemplate: { es: string; en: string } | null;
   matchedApplication?: ApplicationMatch | null;
   onClose: () => void;
   onIgnore: () => void;
@@ -942,8 +964,10 @@ function PostModal({
   const [markError, setMarkError] = useState<string | null>(null);
   const [quickApplying, setQuickApplying] = useState(false);
   const [quickApplyError, setQuickApplyError] = useState<string | null>(null);
+  const [quickApplyConfirmOpen, setQuickApplyConfirmOpen] = useState(false);
 
   async function handleQuickApply() {
+    setQuickApplyConfirmOpen(false);
     setQuickApplying(true);
     setQuickApplyError(null);
     try {
@@ -998,7 +1022,8 @@ function PostModal({
     if (!contactEmail.trim()) return;
     const role = config?.title || "desarrollador Frontend";
     const company = authorName;
-    window.open(buildGmailComposeUrl(contactEmail, role, company, lang), "_blank", "noopener,noreferrer");
+    const template = lang === "en" ? dmTemplate?.en : dmTemplate?.es;
+    window.open(buildGmailComposeUrl(contactEmail, role, company, lang, template), "_blank", "noopener,noreferrer");
   }
 
   const scoreValue = aiScore?.score ?? 0;
@@ -1149,7 +1174,7 @@ function PostModal({
           )}
           <p className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed whitespace-pre-wrap break-words">
             {postText
-              ? linkifyText(postText, { role: config?.title || "desarrollador Frontend", company: authorName })
+              ? linkifyText(postText, { role: config?.title || "desarrollador Frontend", company: authorName, templateEs: dmTemplate?.es, templateEn: dmTemplate?.en })
               : <span className="text-gray-400 italic">Sin contenido</span>}
           </p>
 
@@ -1338,7 +1363,7 @@ function PostModal({
               {matchedApplication?.confidence === "confirmed" ? "Postular igual →" : matchedApplication?.confidence === "possible" ? "¿Postular de nuevo? →" : "Postular →"}
             </button>
             <button
-              onClick={handleQuickApply}
+              onClick={() => setQuickApplyConfirmOpen(true)}
               disabled={quickApplying}
               title="Guarda la postulación con los datos del post, sin abrir el formulario, y sigue buscando"
               className="shrink-0 flex items-center justify-center gap-1.5 px-4 text-sm font-bold py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-60 transition-all active:scale-95 whitespace-nowrap"
@@ -1359,6 +1384,15 @@ function PostModal({
           {quickApplyError && (
             <p className="text-xs text-red-500 dark:text-red-400 text-center">{quickApplyError}</p>
           )}
+          <ConfirmModal
+            open={quickApplyConfirmOpen}
+            title="Postulación rápida"
+            message="Se va a guardar esta vacante en tus postulaciones sin abrir el formulario. ¿Confirmás la postulación rápida?"
+            confirmLabel="Sí, postular"
+            cancelLabel="Cancelar"
+            onConfirm={handleQuickApply}
+            onCancel={() => setQuickApplyConfirmOpen(false)}
+          />
 
           {/* Secondary actions row */}
           <div className="flex gap-2">
@@ -1415,6 +1449,7 @@ function PostCard({
   post,
   score,
   config,
+  dmTemplate,
   applications,
   dimmed = false,
   selected = false,
@@ -1428,6 +1463,7 @@ function PostCard({
   post: LIPost;
   score?: { score: number; reason: string };
   config: LIUserConfig | null;
+  dmTemplate: { es: string; en: string } | null;
   applications: StoredApplication[];
   dimmed?: boolean;
   selected?: boolean;
@@ -1439,21 +1475,7 @@ function PostCard({
   onQuickApply: () => Promise<void>;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [quickApplying, setQuickApplying] = useState(false);
-  const [quickApplyError, setQuickApplyError] = useState<string | null>(null);
   const [showCheck, setShowCheck] = useState(false);
-
-  async function handleQuickApply() {
-    setQuickApplying(true);
-    setQuickApplyError(null);
-    try {
-      await onQuickApply();
-    } catch (e: any) {
-      setQuickApplyError(e?.message || "No se pudo guardar la postulación.");
-    } finally {
-      setQuickApplying(false);
-    }
-  }
   const [modalOpen, setModalOpen] = useState(false);
   const matchedApplication = useMemo(() => findMatchingApplication(post, applications), [post, applications]);
 
@@ -1495,6 +1517,7 @@ function PostCard({
         post={post}
         score={score}
         config={config}
+        dmTemplate={dmTemplate}
         matchedApplication={matchedApplication}
         onClose={() => setModalOpen(false)}
         onIgnore={onIgnore}
@@ -1656,7 +1679,7 @@ function PostCard({
 
         {/* Post text */}
         <div className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap break-words flex-1">
-          {linkifyText(displayText, { role: config?.title || "desarrollador Frontend", company: authorName })}
+          {linkifyText(displayText, { role: config?.title || "desarrollador Frontend", company: authorName, templateEs: dmTemplate?.es, templateEn: dmTemplate?.en })}
           {isLong && (
             <button
               onClick={() => setExpanded(!expanded)}
@@ -1736,27 +1759,7 @@ function PostCard({
             >
               {matchedApplication?.confidence === "confirmed" ? "Postular igual →" : matchedApplication?.confidence === "possible" ? "¿Postular de nuevo? →" : "Postular →"}
             </button>
-            <button
-              onClick={e => { e.stopPropagation(); handleQuickApply(); }}
-              disabled={quickApplying}
-              title="Postulación rápida: guarda y sigue buscando, sin abrir el formulario"
-              className="shrink-0 flex items-center justify-center w-9 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-60 transition-all shadow-sm active:scale-95"
-            >
-              {quickApplying ? (
-                <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                </svg>
-              ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/>
-                </svg>
-              )}
-            </button>
           </div>
-          {quickApplyError && (
-            <p className="text-[10px] text-red-500 dark:text-red-400 text-center">{quickApplyError}</p>
-          )}
         </div>
       </div>
     </div>

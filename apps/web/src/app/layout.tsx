@@ -10,6 +10,7 @@ import { SidebarLinks } from "@/components/SidebarLinks";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { MobileMenuDrawer } from "@/components/MobileMenuDrawer";
+import { ApifyUsageBadge } from "@/components/ApifyUsageBadge";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -93,6 +94,7 @@ export default async function RootLayout({
               <div className="px-6 py-5 border-b border-gray-200 dark:border-gray-800">
                 <span className="font-bold text-gray-900 dark:text-gray-100 text-sm">Job Hunter</span>
                 <span className="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">v1.0 · MVP</span>
+                <ApifyUsageBadge className="mt-2" />
               </div>
 
               <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-gray-800/40">
