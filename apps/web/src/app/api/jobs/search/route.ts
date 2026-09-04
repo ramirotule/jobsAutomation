@@ -13,6 +13,7 @@ async function fetchJobSpy(
   datePosted: string,
   remoteOnly: boolean,
   excludeCompanies: Set<string>,
+  country?: string,
 ): Promise<{ jobs: NormalizedJob[]; rawCount: number }> {
   const baseUrl = process.env.JOBSPY_API_URL
   if (!baseUrl) {
@@ -41,6 +42,7 @@ async function fetchJobSpy(
     hours_old: hoursMap[datePosted] || 168,
     exclude_companies: Array.from(excludeCompanies),
     exclude_locations: ['brazil', 'brasil'],
+    country: country || 'argentina',
   }
 
   console.log(`[JobSpy] Fetching: ${baseUrl}/search`, JSON.stringify({ query, location, is_remote: body.is_remote, hours_old: body.hours_old }))
@@ -104,6 +106,7 @@ export async function POST(request: Request) {
     const location: string = body.location || 'Remote'
     const datePosted: string = body.datePosted || 'all'
     const remoteOnly: boolean = body.remoteOnly ?? false
+    const country: string | undefined = body.country
 
     // Excluded companies / ignored jobs — JobSpy also excludes server-side,
     // this is a redundant client-side double-check.
@@ -127,7 +130,7 @@ export async function POST(request: Request) {
       ...(ignoredJobs || []).map((ij) => ij.company?.toLowerCase().trim()).filter(Boolean),
     ])
 
-    const result = await fetchJobSpy(query, location, datePosted, remoteOnly, allExcluded)
+    const result = await fetchJobSpy(query, location, datePosted, remoteOnly, allExcluded, country)
 
     // Hard safety net: never persist onsite/hybrid jobs when remote-only was
     // requested, regardless of whether JobSpy's own filter worked.

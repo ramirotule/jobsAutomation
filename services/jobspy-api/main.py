@@ -55,6 +55,7 @@ class SearchRequest(BaseModel):
     hours_old: int = Field(default=24, ge=1, le=168, description="Max age in hours")
     exclude_companies: list[str] = Field(default=[], description="Companies to exclude (lowercase)")
     exclude_locations: list[str] = Field(default=["brazil", "brasil"], description="Locations to exclude")
+    country: str | None = Field(default="argentina", description="Scope to a single LatAm country (e.g. 'argentina'). Pass null to scan all of LatAm instead.")
 
 
 # Indeed has no "region" concept — it's strictly per-country, so "Latin
@@ -98,13 +99,18 @@ def search_jobs(req: SearchRequest):
         sites_lower = [s.lower() for s in req.sites]
         non_indeed_sites = [s for s in req.sites if s.lower() != "indeed"]
 
+        # Scoping to one country turns the Indeed loop below from 11 sequential
+        # scrapes into 1 — this is the main lever for search latency.
+        indeed_countries = [req.country.lower()] if req.country else LATAM_COUNTRIES
+        linkedin_location = req.country.title() if req.country else LATAM_LOCATION
+
         dataframes = []
 
-        # LinkedIn (and any other non-Indeed site): one call, LatAm as a region.
+        # LinkedIn (and any other non-Indeed site): one call, region or single country.
         if non_indeed_sites:
             scrape_params: dict = {
                 "site_name": non_indeed_sites,
-                "location": LATAM_LOCATION,
+                "location": linkedin_location,
                 "is_remote": req.is_remote,
                 "job_type": "fulltime",
                 "results_wanted": req.results_wanted,
@@ -115,10 +121,10 @@ def search_jobs(req: SearchRequest):
             if not df_main.empty:
                 dataframes.append(df_main)
 
-        # Indeed: no region concept, loop per LatAm country and merge.
+        # Indeed: no region concept, loop per country and merge.
         if "indeed" in sites_lower:
-            per_country_wanted = max(5, min(req.results_wanted, 15))
-            for country in LATAM_COUNTRIES:
+            per_country_wanted = req.results_wanted if req.country else max(5, min(req.results_wanted, 15))
+            for country in indeed_countries:
                 try:
                     df_country = scrape_jobs(
                         site_name=["indeed"],
