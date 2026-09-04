@@ -2,6 +2,7 @@ services:
   - type: web
     name: jobspy-api
     runtime: docker
+    rootDir: services/jobspy-api
     plan: free
     envVars:
       - key: API_SECRET
