@@ -117,9 +117,13 @@ def search_jobs(req: SearchRequest):
                 "hours_old": req.hours_old,
                 "search_term": req.query,
             }
-            df_main = scrape_jobs(**scrape_params)
-            if not df_main.empty:
-                dataframes.append(df_main)
+            try:
+                df_main = scrape_jobs(**scrape_params)
+                print(f"[{'+'.join(non_indeed_sites)}] rows: {len(df_main)}")
+                if not df_main.empty:
+                    dataframes.append(df_main)
+            except Exception as e:
+                print(f"[{'+'.join(non_indeed_sites)}] skipped due to error: {e}")
 
         # Indeed: no region concept, loop per country and merge.
         if "indeed" in sites_lower:
@@ -136,6 +140,7 @@ def search_jobs(req: SearchRequest):
                         country_indeed=country,
                         search_term=req.query,
                     )
+                    print(f"[Indeed:{country}] rows: {len(df_country)}")
                     if not df_country.empty:
                         dataframes.append(df_country)
                 except Exception as e:
@@ -173,6 +178,14 @@ def search_jobs(req: SearchRequest):
             # Exclude unwanted locations
             location_lower = location.lower()
             if any(exc in location_lower for exc in exclude_locations_lower):
+                continue
+
+            # LinkedIn's remote filter is known to leak listings from other
+            # countries regardless of the location param (that's why
+            # exclude_locations existed before this field did). When scoped to
+            # one country, require the location text to actually mention it —
+            # unless it's blank, since some remote posts just say "Remote".
+            if req.country and location_lower and req.country.lower() not in location_lower:
                 continue
 
             # Detect remote honestly, per row: prefer jobspy's own is_remote column
