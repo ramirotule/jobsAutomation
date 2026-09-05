@@ -14,6 +14,7 @@ async function fetchJobSpy(
   remoteOnly: boolean,
   excludeCompanies: Set<string>,
   country?: string,
+  sites?: string[],
 ): Promise<{ jobs: NormalizedJob[]; rawCount: number }> {
   const baseUrl = process.env.JOBSPY_API_URL
   if (!baseUrl) {
@@ -33,9 +34,7 @@ async function fetchJobSpy(
 
   const body = {
     query,
-    // Glassdoor doesn't support a worldwide/remote-everywhere search — it needs
-    // a specific country, which conflicts with "remote in every country".
-    sites: ['linkedin', 'indeed'],
+    sites: sites && sites.length > 0 ? sites : ['linkedin', 'indeed'],
     location: remoteOnly ? 'Remote' : location,
     is_remote: remoteOnly || location === 'Remote',
     results_wanted: 50,
@@ -107,6 +106,7 @@ export async function POST(request: Request) {
     const datePosted: string = body.datePosted || 'all'
     const remoteOnly: boolean = body.remoteOnly ?? false
     const country: string | undefined = body.country
+    const sites: string[] | undefined = Array.isArray(body.sites) ? body.sites : undefined
 
     // Excluded companies / ignored jobs — JobSpy also excludes server-side,
     // this is a redundant client-side double-check.
@@ -130,7 +130,7 @@ export async function POST(request: Request) {
       ...(ignoredJobs || []).map((ij) => ij.company?.toLowerCase().trim()).filter(Boolean),
     ])
 
-    const result = await fetchJobSpy(query, location, datePosted, remoteOnly, allExcluded, country)
+    const result = await fetchJobSpy(query, location, datePosted, remoteOnly, allExcluded, country, sites)
 
     // Hard safety net: never persist onsite/hybrid jobs when remote-only was
     // requested, regardless of whether JobSpy's own filter worked.

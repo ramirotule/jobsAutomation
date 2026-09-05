@@ -289,14 +289,14 @@ export default function VacantesPage() {
   // polls the run to completion, mirroring /buscar-empleo's linkedin-test flow.
   // JobSpy is the only provider — results are shown exactly as it returns them,
   // no automatic AI matching after a search.
-  const handleJobSearch = async (query: string, datePosted: string) => {
+  const handleJobSearch = async (query: string, datePosted: string, sites: string[]) => {
     setIsScraping('jobspy');
     try {
       const res = await fetch('/api/jobs/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // Always remote, worldwide — no location/remote toggle in the UI anymore.
-        body: JSON.stringify({ query, location: 'Remote', datePosted, remoteOnly: true }),
+        // Always remote, scoped to Argentina (backend default) — no location toggle in the UI.
+        body: JSON.stringify({ query, location: 'Remote', datePosted, remoteOnly: true, sites }),
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -358,9 +358,9 @@ export default function VacantesPage() {
       <JobSearchModal
         open={showSearchModal}
         onClose={() => setShowSearchModal(false)}
-        onConfirm={(query, datePosted) => {
+        onConfirm={(query, datePosted, sites) => {
           setShowSearchModal(false);
-          handleJobSearch(query, datePosted);
+          handleJobSearch(query, datePosted, sites);
         }}
       />
       <TailorResultModal
@@ -943,6 +943,13 @@ function Tag({
   );
 }
 
+const SOURCE_OPTIONS = [
+  { value: 'linkedin', label: 'LinkedIn' },
+  { value: 'indeed', label: 'Indeed' },
+  { value: 'glassdoor', label: 'Glassdoor' },
+  { value: 'google', label: 'Google' },
+];
+
 function JobSearchModal({
   open,
   onClose,
@@ -950,10 +957,17 @@ function JobSearchModal({
 }: {
   open: boolean;
   onClose: () => void;
-  onConfirm: (query: string, datePosted: string) => void;
+  onConfirm: (query: string, datePosted: string, sites: string[]) => void;
 }) {
   const [query, setQuery] = useState('frontend developer');
   const [datePosted, setDatePosted] = useState('week');
+  const [sites, setSites] = useState<string[]>(['linkedin', 'indeed']);
+
+  const toggleSite = (value: string) => {
+    setSites((prev) =>
+      prev.includes(value) ? prev.filter((s) => s !== value) : [...prev, value],
+    );
+  };
 
   const DATE_OPTIONS = [
     { value: 'hour', label: 'Última hora' },
@@ -981,7 +995,7 @@ function JobSearchModal({
           </div>
           <div>
             <h2 className="text-xl font-bold text-gray-900 tracking-tight">Buscar vacantes</h2>
-            <p className="text-xs text-gray-500 font-medium">JobSpy — LinkedIn + Indeed</p>
+            <p className="text-xs text-gray-500 font-medium">JobSpy — elegí las fuentes</p>
           </div>
         </div>
 
@@ -998,6 +1012,27 @@ function JobSearchModal({
               className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 text-sm focus:bg-white focus:ring-4 focus:ring-indigo-50 focus:border-indigo-200 transition-all outline-none font-medium text-gray-700"
               autoFocus
             />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">
+              Fuentes
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {SOURCE_OPTIONS.map((s) => (
+                <button
+                  key={s.value}
+                  onClick={() => toggleSite(s.value)}
+                  className={`text-xs px-3 py-1.5 rounded-lg border-2 font-bold transition-all ${
+                    sites.includes(s.value)
+                      ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                      : 'border-gray-100 bg-gray-50 text-gray-400 hover:border-gray-200'
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div>
@@ -1037,8 +1072,8 @@ function JobSearchModal({
             Cancelar
           </button>
           <button
-            onClick={() => onConfirm(query, datePosted)}
-            disabled={!query.trim()}
+            onClick={() => onConfirm(query, datePosted, sites)}
+            disabled={!query.trim() || sites.length === 0}
             className="flex-[2] bg-indigo-600 text-white text-sm font-bold py-3.5 rounded-2xl hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50 disabled:grayscale"
           >
             Buscar

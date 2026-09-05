@@ -71,6 +71,41 @@ LATAM_COUNTRIES = [
 ]
 LATAM_LOCATION = "Latin America"
 
+# Maps a country name to its ISO-ish code as the job sites actually write it.
+# Indeed formats locations as "City, STATE, BR" and its URLs as "br.indeed.com",
+# so blacklisting by the full word "brazil"/"brasil" alone misses every listing
+# that only carries the "BR" code — which is most of them.
+_COUNTRY_CODES = {
+    "argentina": "ar", "brazil": "br", "brasil": "br", "chile": "cl",
+    "colombia": "co", "costa rica": "cr", "ecuador": "ec", "mexico": "mx",
+    "panama": "pa", "peru": "pe", "uruguay": "uy", "venezuela": "ve",
+}
+
+
+def _location_excluded(location: str, job_url: str, exclude_names: list[str]) -> bool:
+    """True if a listing belongs to an excluded country.
+
+    Matches three ways because the sites are inconsistent:
+      1. the full country word appears in the location ("Brasil", "Brazil")
+      2. the location's trailing country-code segment matches ("..., BR")
+      3. the Indeed domain matches ("br.indeed.com")
+    """
+    loc = (location or "").lower()
+    for name in exclude_names:
+        if name and name in loc:
+            return True
+
+    codes = {_COUNTRY_CODES[n] for n in exclude_names if n in _COUNTRY_CODES}
+    if not codes:
+        return False
+
+    last_segment = loc.rsplit(",", 1)[-1].strip() if "," in loc else ""
+    if last_segment in codes:
+        return True
+
+    url = (job_url or "").lower()
+    return any(f"{code}.indeed.com" in url for code in codes)
+
 
 class JobResult(BaseModel):
     external_id: str
@@ -97,36 +132,57 @@ def health():
 def search_jobs(req: SearchRequest):
     try:
         sites_lower = [s.lower() for s in req.sites]
-        non_indeed_sites = [s for s in req.sites if s.lower() != "indeed"]
+        indeed_selected = "indeed" in sites_lower
+        google_selected = "google" in sites_lower
+        # LinkedIn + Glassdoor share one location-based call. Indeed and Google
+        # each need their own call shape, so they're handled separately.
+        batch_sites = [s for s in sites_lower if s not in ("indeed", "google")]
 
         # Scoping to one country turns the Indeed loop below from 11 sequential
         # scrapes into 1 — this is the main lever for search latency.
         indeed_countries = [req.country.lower()] if req.country else LATAM_COUNTRIES
-        linkedin_location = req.country.title() if req.country else LATAM_LOCATION
+        batch_location = req.country.title() if req.country else LATAM_LOCATION
 
         dataframes = []
 
-        # LinkedIn (and any other non-Indeed site): one call, region or single country.
-        if non_indeed_sites:
-            scrape_params: dict = {
-                "site_name": non_indeed_sites,
-                "location": linkedin_location,
-                "is_remote": req.is_remote,
-                "job_type": "fulltime",
-                "results_wanted": req.results_wanted,
-                "hours_old": req.hours_old,
-                "search_term": req.query,
-            }
+        # LinkedIn / Glassdoor: one call, region or single country.
+        if batch_sites:
             try:
-                df_main = scrape_jobs(**scrape_params)
-                print(f"[{'+'.join(non_indeed_sites)}] rows: {len(df_main)}")
-                if not df_main.empty:
-                    dataframes.append(df_main)
+                df_batch = scrape_jobs(
+                    site_name=batch_sites,
+                    location=batch_location,
+                    is_remote=req.is_remote,
+                    job_type="fulltime",
+                    results_wanted=req.results_wanted,
+                    hours_old=req.hours_old,
+                    search_term=req.query,
+                )
+                print(f"[{'+'.join(batch_sites)}] rows: {len(df_batch)}")
+                if not df_batch.empty:
+                    dataframes.append(df_batch)
             except Exception as e:
-                print(f"[{'+'.join(non_indeed_sites)}] skipped due to error: {e}")
+                print(f"[{'+'.join(batch_sites)}] skipped due to error: {e}")
+
+        # Google Jobs: uses a natural-language google_search_term, not the
+        # structured location/search_term the other sites take.
+        if google_selected:
+            where = req.country or "Latin America"
+            google_term = f"{req.query} remote jobs in {where}"
+            try:
+                df_google = scrape_jobs(
+                    site_name=["google"],
+                    google_search_term=google_term,
+                    results_wanted=req.results_wanted,
+                    hours_old=req.hours_old,
+                )
+                print(f"[google] rows: {len(df_google)}")
+                if not df_google.empty:
+                    dataframes.append(df_google)
+            except Exception as e:
+                print(f"[google] skipped due to error: {e}")
 
         # Indeed: no region concept, loop per country and merge.
-        if "indeed" in sites_lower:
+        if indeed_selected:
             per_country_wanted = req.results_wanted if req.country else max(5, min(req.results_wanted, 15))
             for country in indeed_countries:
                 try:
@@ -175,17 +231,10 @@ def search_jobs(req: SearchRequest):
             if company_key in exclude_companies_set:
                 continue
 
-            # Exclude unwanted locations
+            # Exclude unwanted countries (matches full name, "..., BR" code, and
+            # the "br.indeed.com" domain — see _location_excluded).
             location_lower = location.lower()
-            if any(exc in location_lower for exc in exclude_locations_lower):
-                continue
-
-            # LinkedIn's remote filter is known to leak listings from other
-            # countries regardless of the location param (that's why
-            # exclude_locations existed before this field did). When scoped to
-            # one country, require the location text to actually mention it —
-            # unless it's blank, since some remote posts just say "Remote".
-            if req.country and location_lower and req.country.lower() not in location_lower:
+            if _location_excluded(location, _clean(row, "job_url"), exclude_locations_lower):
                 continue
 
             # Detect remote honestly, per row: prefer jobspy's own is_remote column
